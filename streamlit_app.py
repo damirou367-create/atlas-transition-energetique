@@ -1353,14 +1353,17 @@ st.iframe(
         // Bloc technique sans contenu : on le sort de la page pour qu'il ne laisse ni trait ni marge.
         const bloc = window.frameElement.closest('.stElementContainer');
         Object.assign(bloc.style, { position: 'absolute', height: '0', overflow: 'hidden' });
-        const doc = window.parent.document;
-        doc.documentElement.setAttribute('translate', 'no');
-        if (!doc.querySelector('meta[name="google"]')) {
-            const meta = doc.createElement('meta');
-            meta.name = 'google';
-            meta.content = 'notranslate';
-            doc.head.appendChild(meta);
-        }
+        // Sur Streamlit Community Cloud, l'application est elle-même dans un cadre : window.top
+        // est alors la page visitée, et window.parent le document de l'application.
+        [window.parent.document, window.top.document].forEach(function (doc) {
+            doc.documentElement.setAttribute('translate', 'no');
+            if (!doc.querySelector('meta[name="google"]')) {
+                const meta = doc.createElement('meta');
+                meta.name = 'google';
+                meta.content = 'notranslate';
+                doc.head.appendChild(meta);
+            }
+        });
     })();
     </script>
     """,
@@ -1389,19 +1392,23 @@ st.iframe(
         const bloc = window.frameElement.closest('.stElementContainer');
         Object.assign(bloc.style, { position: 'absolute', height: '0', overflow: 'hidden' });
         const doc = window.parent.document;
+        const sommet = window.top.document;
 
-        if (!doc.querySelector('link[rel="manifest"]')) {
-            const lien = doc.createElement('link');
+        // C'est le manifeste de la page visitée qui décide du nom et de l'icône à
+        // l'installation : sur le Cloud, on y remplace celui de Streamlit par le nôtre.
+        let lien = sommet.querySelector('link[rel="manifest"]');
+        if (!lien) {
+            lien = sommet.createElement('link');
             lien.rel = 'manifest';
-            lien.href = 'app/static/manifest.json';
-            doc.head.appendChild(lien);
+            sommet.head.appendChild(lien);
         }
+        lien.href = new URL('app/static/manifest.json', window.parent.location.href).href;
 
-        if (!doc.querySelector('meta[name="theme-color"]')) {
-            const meta = doc.createElement('meta');
+        if (!sommet.querySelector('meta[name="theme-color"]')) {
+            const meta = sommet.createElement('meta');
             meta.name = 'theme-color';
             meta.content = '#6b8e23';
-            doc.head.appendChild(meta);
+            sommet.head.appendChild(meta);
         }
 
         if ('serviceWorker' in navigator) {
@@ -1914,7 +1921,7 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
 
 /* ---------- Bouton flottant « ↑ Analyses » ---------- */
 #analyses {{ scroll-margin-top: 4.5rem; }}
-.gaea-retour-onglets {{ position: fixed; right: 26px; bottom: 26px; z-index: 999; display: inline-flex; align-items: center;
+.gaea-retour-onglets {{ position: fixed; right: 26px; bottom: 78px; z-index: 999; display: inline-flex; align-items: center;
     padding: 10px; border-radius: 999px; text-decoration: none !important;
     font-weight: 600; font-size: 0.88rem; color: #fff !important;
     background: linear-gradient(135deg, {GAEA_CORP["accent"]}, {GAEA_CORP["accent_dark"]});

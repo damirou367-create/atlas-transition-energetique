@@ -2071,6 +2071,16 @@ a.gaea-source p {{ margin: 0; font-size: 0.8rem; line-height: 1.45; color: rgba(
 @media (max-width: 640px) {{ .gaea-methodo-bandeau {{ grid-template-columns: repeat(2, 1fr); }} }}
 @keyframes gaeaApparition {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: none; }} }}
 .gaea-retenir, .gaea-objectif {{ animation: gaeaApparition 0.55s ease-out both; }}
+/* Changement d'onglet : le contenu monte à sa place. */
+.stTabs [role="tabpanel"] {{ animation: gaeaOnglet 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }}
+@keyframes gaeaOnglet {{ from {{ opacity: 0; transform: translateY(26px); }} to {{ opacity: 1; transform: none; }} }}
+.stTabs [role="tab"][aria-selected="true"] {{ animation: gaeaOngletActif 0.5s ease-out; }}
+@keyframes gaeaOngletActif {{ from {{ box-shadow: 0 0 0 0 rgba(212, 160, 23, 0.6); }} to {{ box-shadow: 0 0 0 14px rgba(212, 160, 23, 0); }} }}
+/* Barre dorée de progression de la lecture, remplie par le script de la page d'ouverture. */
+#gaea-lecture {{ position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 999990; pointer-events: none;
+    transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, {GAEA_CORP["accent"]}, #d4a017, #f5e6b8); }}
+@media print {{ #gaea-lecture {{ display: none; }} }}
+@media (prefers-reduced-motion: reduce) {{ .stTabs [role="tabpanel"], .stTabs [role="tab"] {{ animation: none !important; }} }}
 .gaea-retenir {{ position: relative; display: flex; align-items: flex-start; gap: 14px; margin: 12px 0 22px 0;
     padding: 14px 18px 14px 16px; border-radius: 16px;
     background: linear-gradient(100deg, rgba(212,160,23,0.16), rgba(212,160,23,0.04) 60%, rgba(255,255,255,0.5));
@@ -2283,6 +2293,20 @@ OUVERTURE_STREAMLIT = """
     const bloc = window.frameElement.closest('.stElementContainer');
     Object.assign(bloc.style, { position: 'absolute', height: '0', overflow: 'hidden' });
     const doc = window.parent.document;
+
+    // Barre de progression de la lecture : elle suit le défilement de la zone principale.
+    if (!doc.getElementById('gaea-lecture')) {
+        const barre = doc.createElement('div');
+        barre.id = 'gaea-lecture';
+        doc.body.appendChild(barre);
+        doc.addEventListener('scroll', function (e) {
+            const zone = e.target;
+            if (!zone.matches || !zone.matches('[data-testid="stMain"]')) return;
+            const total = zone.scrollHeight - zone.clientHeight;
+            barre.style.transform = 'scaleX(' + (total > 0 ? zone.scrollTop / total : 0) + ')';
+        }, true);
+    }
+
     if (doc.getElementById('gaea-rideau')) return;
     try {
         if (window.parent.sessionStorage.getItem('gaea-entree')) return;

@@ -16,7 +16,7 @@ headingFontWeights = [700, 700, 600, 600, 600, 600]
 greenColor = "#274e13"
 orangeColor = "#b45f06"
 redColor = "#595959"
-chartCategoricalColors = ["#595959", "#b45f06", "#274e13", "#3c4043", "#7f7f7f", "#bf9000", "#45818e"]
+chartCategoricalColors = ["#9E0142", "#D53E4F", "#F46D43", "#D9A21B", "#4E9A2A", "#3288BD", "#5E4FA2"]
 dataframeHeaderBackgroundColor = "#d9ead3"
 dataframeBorderColor = "#ddd3bf"
 

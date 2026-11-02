@@ -1500,21 +1500,20 @@ GAEA_CORP = {
     "card_bg": "#ffffff",
 }
 
-# Palette catégorielle Gaea, dérivée cette fois des 4 couleurs déjà
-# utilisées pour les cartes KPI de cette version Streamlit (vert, marron,
-# bordeaux, violet -- voir cartes_kpi() plus haut), complétée par 3
-# teintes du même esprit (orange, doré, sarcelle) pour atteindre les 7
-# couleurs nécessaires aux graphiques multi-pays. Assure une cohérence
-# visuelle totale entre les cartes KPI et les courbes de chaque onglet.
+# Palette catégorielle des pays : les 7 premières couleurs de ALT_CATEGORY,
+# du script tutoriel transmis par le coordinateur, exactement comme dans le
+# tableau de bord natif (app.py). Les deux teintes trop pâles sur fond clair
+# (#FDAE61, #FEE08B) y sont remplacées par un doré et un vert plus soutenus.
 GAEA_PALETTE = [
-    GAEA_CORP["accent_rouge"],  # bordeaux -- comme les cartes "Objectif" / statistiques de test
-    "#b45f06",                  # orange
-    GAEA_CORP["accent_dark"],   # vert -- comme les cartes "Valeur actuelle" / données réelles
-    "#3c4043",                  # violet -- comme les cartes p-valeur
-    GAEA_CORP["brown"],         # marron -- comme les cartes "Rythme historique" / projections
-    "#bf9000",                  # doré
-    "#45818e",                  # sarcelle
+    "#9E0142", "#D53E4F", "#F46D43", "#D9A21B",
+    "#4E9A2A", "#3288BD", "#5E4FA2",
 ]
+
+# Couleur attribuée à chaque pays (nom français), d'après sa place dans la
+# liste de référence de la vue choisie : 7 pays de l'étude ou 5 plus grands
+# producteurs du continent, dans le même ordre que le natif. Un pays garde
+# ainsi sa couleur quand on en décoche un autre, et la même que dans app.py.
+COULEUR_PAYS = {}
 
 # Rotation de couleurs "pleines" Gaea pour les cartes KPI et les
 # graphiques à une seule série (mix, typologie) -- distinctes de la
@@ -1544,6 +1543,19 @@ def couleurs_categorielles(n):
     if n <= 0:
         return []
     return [GAEA_PALETTE[i % len(GAEA_PALETTE)] for i in range(n)]
+
+
+def couleurs_des_pays(noms):
+    """Couleur de chaque pays (nom français) : celle de COULEUR_PAYS si le pays
+    y figure, sinon la suivante de la palette."""
+    secours = couleurs_categorielles(len(noms))
+    return [COULEUR_PAYS.get(nom, secours[i]) for i, nom in enumerate(noms)]
+
+
+def ordre_des_pays(noms):
+    """Range les pays dans l'ordre de la liste de référence (celui du natif)."""
+    rang = {nom: i for i, nom in enumerate(COULEUR_PAYS)}
+    return sorted(noms, key=lambda nom: rang.get(nom, len(rang)))
 
 
 # ---------------------------------------------------------------
@@ -1643,7 +1655,8 @@ def graphique_lignes(tableau_pivot, titre_y, hauteur=420, lisse=True):
     """Graphique multi-séries (une ligne par pays) à partir d'un pivot
     Pandas (index = année, colonnes = pays)."""
     fig = go.Figure()
-    couleurs = couleurs_categorielles(len(tableau_pivot.columns))
+    tableau_pivot = tableau_pivot[ordre_des_pays(list(tableau_pivot.columns))]
+    couleurs = couleurs_des_pays(list(tableau_pivot.columns))
     for colonne, couleur in zip(tableau_pivot.columns, couleurs):
         fig.add_trace(go.Scatter(
             x=tableau_pivot.index, y=tableau_pivot[colonne],
@@ -1681,8 +1694,9 @@ def graphique_nuage(df, x, y, colonne_couleur, titre_x, titre_y, hauteur=460, af
     avec une droite de régression optionnelle (NumPy polyfit) superposée pour
     illustrer visuellement le sens et la force de la corrélation calculée."""
     fig = go.Figure()
-    groupes = list(df.groupby(colonne_couleur))
-    couleurs = couleurs_categorielles(len(groupes))
+    groupes = dict(list(df.groupby(colonne_couleur)))
+    groupes = [(nom, groupes[nom]) for nom in ordre_des_pays(list(groupes))]
+    couleurs = couleurs_des_pays([nom for nom, _ in groupes])
     for (nom, sous_df), couleur in zip(groupes, couleurs):
         fig.add_trace(go.Scatter(
             x=sous_df[x], y=sous_df[y], mode="markers", name=nom,
@@ -2720,6 +2734,7 @@ if vue == "7 pays de comparaison du projet":
     pool_pays = [p for p in PAYS_COMPARAISON if p in df["pays"].unique()]
 else:
     pool_pays = top5_par_continent.get(vue, [])
+COULEUR_PAYS.update({NOMS_FR.get(p, p): GAEA_PALETTE[i % len(GAEA_PALETTE)] for i, p in enumerate(pool_pays)})
 
 with st.sidebar.container(border=True):
     entete_filtre(2, "Pays à comparer")

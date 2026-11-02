@@ -246,7 +246,7 @@ def charger_donnees(chemin=FICHIER_BASE):
     return df
 
 
-COULEURS_CLUSTER = ["#8D1C42", "#2f80ed", "#4d6519", "#b45309", "#3d346b", "#2A9D8F", "#D4A017", "#7a1f3d"]
+COULEURS_CLUSTER = ["#595959", "#1565c0", "#274e13", "#b45f06", "#3c4043", "#45818e", "#bf9000", "#595959"]
 
 
 def _kmeans_plus_plus_init_np(X, k, graine=42):
@@ -544,15 +544,15 @@ def graphique_dendrogramme(racine, sous_echantillonne, hauteur_coupe=None, group
             x_min, x_max = min(m["x"] for m in membres), max(m["x"] for m in membres)
             fig.add_vrect(
                 x0=x_min - 0.5, x1=x_max + 0.5, layer="below", line_width=0,
-                fillcolor="rgba(107,142,35,0.13)" if i % 2 == 0 else "rgba(212,160,23,0.12)",
+                fillcolor="rgba(56,118,29,0.13)" if i % 2 == 0 else "rgba(191,144,0,0.12)",
             )
             lettre = chr(ord("A") + i)
             detail = _nom(membres[0]) if len(membres) == 1 else f"{len(membres)} pays"
             fig.add_annotation(
                 x=(x_min + x_max) / 2, y=hauteur_coupe, yshift=14 + (i % 2) * 18,
                 text=f"<b>{lettre}</b> · {detail}", showarrow=False,
-                font=dict(size=12, color="#4d6519"), bgcolor="rgba(255,255,255,0.85)",
-                bordercolor="rgba(77,101,25,0.25)", borderpad=3,
+                font=dict(size=12, color="#274e13"), bgcolor="rgba(255,255,255,0.85)",
+                bordercolor="rgba(39,78,19,0.25)", borderpad=3,
             )
 
     for couleur, (x_vals, y_vals) in segments.items():
@@ -1407,7 +1407,7 @@ st.iframe(
         if (!sommet.querySelector('meta[name="theme-color"]')) {
             const meta = sommet.createElement('meta');
             meta.name = 'theme-color';
-            meta.content = '#6b8e23';
+            meta.content = '#38761d';
             sommet.head.appendChild(meta);
         }
 
@@ -1492,11 +1492,11 @@ GAEA_CORP = {
     "bg":      "#f5f0e6",
     "panel":   "#e7dfcf",
     "text":    "#2e2b26",
-    "accent":  "#6b8e23",
-    "accent2": "#8f9779",
-    "brown":   "#8b6b4a",
-    "accent_dark": "#4d6519",
-    "accent_rouge": "#7a1f3d",
+    "accent":  "#38761d",
+    "accent2": "#999999",
+    "brown":   "#7f7f7f",
+    "accent_dark": "#274e13",
+    "accent_rouge": "#595959",
     "card_bg": "#ffffff",
 }
 
@@ -1508,18 +1508,18 @@ GAEA_CORP = {
 # visuelle totale entre les cartes KPI et les courbes de chaque onglet.
 GAEA_PALETTE = [
     GAEA_CORP["accent_rouge"],  # bordeaux -- comme les cartes "Objectif" / statistiques de test
-    "#B45309",                  # orange
+    "#b45f06",                  # orange
     GAEA_CORP["accent_dark"],   # vert -- comme les cartes "Valeur actuelle" / données réelles
-    "#3D346B",                  # violet -- comme les cartes p-valeur
+    "#3c4043",                  # violet -- comme les cartes p-valeur
     GAEA_CORP["brown"],         # marron -- comme les cartes "Rythme historique" / projections
-    "#D4A017",                  # doré
-    "#2A9D8F",                  # sarcelle
+    "#bf9000",                  # doré
+    "#45818e",                  # sarcelle
 ]
 
 # Rotation de couleurs "pleines" Gaea pour les cartes KPI et les
 # graphiques à une seule série (mix, typologie) -- distinctes de la
 # palette catégorielle multi-pays ci-dessus.
-GAEA_KPI_COLORS = ["#6b8e23", "#8b6b4a", "#4d6519", "#8f9779", "#a8763e", "#5a7a1e"]
+GAEA_KPI_COLORS = ["#38761d", "#7f7f7f", "#274e13", "#999999", "#a8763e", "#5a7a1e"]
 
 # ---------------------------------------------------------------
 # Config Plotly partagée : masque toute la barre d'outils sauf le
@@ -1783,8 +1783,8 @@ st.markdown(f"""
 /* ---------- Fond : crème légèrement texturé, comme le papier du rapport ---------- */
 .stApp {{
     background:
-        radial-gradient(circle at 92% 4%, rgba(107, 142, 35, 0.10) 0, rgba(107, 142, 35, 0) 32%),
-        radial-gradient(circle at 0% 100%, rgba(139, 107, 74, 0.08) 0, rgba(139, 107, 74, 0) 35%),
+        radial-gradient(circle at 92% 4%, rgba(56, 118, 29, 0.10) 0, rgba(56, 118, 29, 0) 32%),
+        radial-gradient(circle at 0% 100%, rgba(127, 127, 127, 0.08) 0, rgba(127, 127, 127, 0) 35%),
         {GAEA_CORP["bg"]};
 }}
 .block-container {{ padding-top: 1.6rem; max-width: 1400px; }}
@@ -1792,7 +1792,7 @@ st.markdown(f"""
 /* ---------- Bandeau d'accueil (même esprit que la page de garde du rapport) ---------- */
 .gaea-hero {{
     position: relative; overflow: hidden; border-radius: 22px; padding: 30px 36px 30px 36px;
-    background: linear-gradient(125deg, #3f5414 0%, {GAEA_CORP["accent_dark"]} 45%, {GAEA_CORP["accent"]} 100%);
+    background: linear-gradient(125deg, #1e3d0c 0%, {GAEA_CORP["accent_dark"]} 45%, {GAEA_CORP["accent"]} 100%);
     color: #fff; box-shadow: 0 18px 40px -18px rgba(46, 43, 38, 0.55); margin-bottom: 18px;
 }}
 .gaea-hero::before {{
@@ -1807,10 +1807,10 @@ st.markdown(f"""
     box-shadow: 0 0 0 40px rgba(255,255,255,0.03), 0 0 0 90px rgba(255,255,255,0.025);
 }}
 .gaea-hero-filet {{ position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
-    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #d4a017 50%, {GAEA_CORP["brown"]}); }}
+    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #bf9000 50%, {GAEA_CORP["brown"]}); }}
 .gaea-hero-eyebrow {{ position: relative; font-size: 0.74rem; letter-spacing: 0.32em; text-transform: uppercase;
     color: rgba(255,255,255,0.78); font-weight: 600; }}
-.gaea-hero-eyebrow span {{ display: inline-block; width: 26px; height: 2px; background: #d4a017;
+.gaea-hero-eyebrow span {{ display: inline-block; width: 26px; height: 2px; background: #bf9000;
     vertical-align: middle; margin: 0 10px 2px 10px; }}
 .gaea-hero-title {{ position: relative; font-family: 'Fraunces', Georgia, serif; font-size: 2.45rem; line-height: 1.12;
     font-weight: 700; color: #fff; margin: 10px 0 10px 0; max-width: 860px; }}
@@ -1826,7 +1826,7 @@ st.markdown(f"""
 @media (max-width: 1100px) {{ .gaea-hero-grid {{ grid-template-columns: 1fr; }} }}
 .gaea-hero-sub b {{ color: #f5e6b8; font-weight: 600; }}
 .gaea-hero-stats {{ position: relative; display: flex; flex-wrap: wrap; gap: 26px; margin-top: 22px; }}
-.gaea-stat {{ flex: 1 1 150px; padding-left: 14px; border-left: 3px solid #d4a017; }}
+.gaea-stat {{ flex: 1 1 150px; padding-left: 14px; border-left: 3px solid #bf9000; }}
 .gaea-stat-valeur {{ font-family: 'Fraunces', Georgia, serif; font-size: 2.1rem; font-weight: 700; line-height: 1.05; color: #fff; }}
 .gaea-stat-label {{ font-size: 0.8rem; line-height: 1.4; color: rgba(255,255,255,0.8); margin-top: 6px; }}
 .gaea-spark {{ position: relative; padding: 18px 20px 14px 20px; border-radius: 18px; background: rgba(255,255,255,0.08);
@@ -1834,24 +1834,24 @@ st.markdown(f"""
 .gaea-spark-titre {{ font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.75); font-weight: 600; }}
 .gaea-spark-chiffres {{ display: flex; align-items: baseline; gap: 10px; margin: 6px 0 4px 0; font-family: 'Fraunces', Georgia, serif; }}
 .gaea-spark-chiffres span {{ font-size: 1.3rem; color: rgba(255,255,255,0.75); }}
-.gaea-spark-chiffres .gaea-spark-fleche {{ color: #d4a017; }}
+.gaea-spark-chiffres .gaea-spark-fleche {{ color: #bf9000; }}
 .gaea-spark-chiffres b {{ font-size: 2rem; color: #f5e6b8; }}
 .gaea-spark-badge {{ margin-left: auto; align-self: center; font-family: 'Inter', sans-serif; font-style: normal;
-    font-size: 0.78rem; font-weight: 700; color: #3f5414; background: #f5e6b8; padding: 4px 10px; border-radius: 999px; }}
+    font-size: 0.78rem; font-weight: 700; color: #1e3d0c; background: #f5e6b8; padding: 4px 10px; border-radius: 999px; }}
 .gaea-spark-note {{ font-size: 0.72rem; line-height: 1.4; color: rgba(255,255,255,0.7); margin-top: 6px; }}
 .gaea-hero .gaea-hero-chips {{ margin-top: 20px; }}
 
 /* ---------- Question de recherche ---------- */
 .gaea-quote {{ position: relative; font-family: 'Fraunces', Georgia, serif; font-style: italic; text-align: center;
     color: {GAEA_CORP["accent_dark"]}; font-size: 1.12rem; line-height: 1.5; padding: 18px 48px; margin: 6px 0 14px 0;
-    background: rgba(255,255,255,0.65); border-radius: 16px; border: 1px solid rgba(77, 101, 25, 0.15); }}
+    background: rgba(255,255,255,0.65); border-radius: 16px; border: 1px solid rgba(39, 78, 19, 0.15); }}
 .gaea-quote-source {{ font-family: 'Inter', sans-serif; font-style: normal; font-size: 0.8rem; color: rgba(46,43,38,0.6);
-    margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(139,107,74,0.18); }}
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(127,127,127,0.18); }}
 .gaea-section-label {{ display: flex; align-items: center; gap: 12px; font-size: 0.74rem; letter-spacing: 0.22em;
     text-transform: uppercase; font-weight: 700; color: {GAEA_CORP["accent_dark"]}; margin: 4px 0 10px 0; }}
-.gaea-section-label::before {{ content: ""; width: 26px; height: 3px; border-radius: 3px; background: #d4a017; }}
-.gaea-section-label::after {{ content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(139,107,74,0.35), transparent); }}
-.gaea-quote::before, .gaea-quote::after {{ position: absolute; font-size: 3.2rem; line-height: 1; color: #d4a017; opacity: 0.55; }}
+.gaea-section-label::before {{ content: ""; width: 26px; height: 3px; border-radius: 3px; background: #bf9000; }}
+.gaea-section-label::after {{ content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(127,127,127,0.35), transparent); }}
+.gaea-quote::before, .gaea-quote::after {{ position: absolute; font-size: 3.2rem; line-height: 1; color: #bf9000; opacity: 0.55; }}
 .gaea-quote::before {{ content: "“"; left: 16px; top: 6px; }}
 .gaea-quote::after {{ content: "”"; right: 16px; bottom: -14px; }}
 
@@ -1860,7 +1860,7 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
 [data-testid="stHeadingWithActionElements"] h3 {{ position: relative; padding-bottom: 10px; }}
 [data-testid="stHeadingWithActionElements"] h3::after {{
     content: ""; position: absolute; left: 0; bottom: 0; width: 64px; height: 3px; border-radius: 3px;
-    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #d4a017);
+    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #bf9000);
 }}
 
 /* ---------- Onglets : tuiles (5 + 4 sur grand écran) ---------- */
@@ -1889,18 +1889,18 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
     overflow-wrap: normal; word-break: normal; hyphens: manual; }}
 .stTabs [role="tab"] p span[role="img"] {{ flex: 0 0 auto; display: inline-flex !important; align-items: center; justify-content: center;
     width: 34px; height: 34px; border-radius: 11px; font-size: 19px; color: {GAEA_CORP["accent_dark"]};
-    background: linear-gradient(135deg, rgba(107,142,35,0.18), rgba(107,142,35,0.06));
+    background: linear-gradient(135deg, rgba(56,118,29,0.18), rgba(56,118,29,0.06));
     transition: transform 0.2s ease, background 0.2s ease; }}
 .stTabs [role="tab"]:not([aria-selected="true"]):hover {{ transform: translateY(-3px); background: #fff;
-    border-color: rgba(107,142,35,0.45); box-shadow: 0 14px 22px -14px rgba(77,101,25,0.55); }}
+    border-color: rgba(56,118,29,0.45); box-shadow: 0 14px 22px -14px rgba(39,78,19,0.55); }}
 .stTabs [role="tab"]:not([aria-selected="true"]):hover p span[role="img"] {{ transform: scale(1.08) rotate(-4deg);
-    background: linear-gradient(135deg, #f5e6b8, rgba(212,160,23,0.35)); }}
+    background: linear-gradient(135deg, #f5e6b8, rgba(191,144,0,0.35)); }}
 .stTabs [role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, {GAEA_CORP["accent"]} 0%, {GAEA_CORP["accent_dark"]} 70%);
     border-color: transparent; transform: translateY(-1px);
-    box-shadow: 0 16px 28px -14px rgba(77, 101, 25, 0.95), 0 0 0 3px rgba(212,160,23,0.22), inset 0 -3px 0 #d4a017; }}
+    box-shadow: 0 16px 28px -14px rgba(39, 78, 19, 0.95), 0 0 0 3px rgba(191,144,0,0.22), inset 0 -3px 0 #bf9000; }}
 .stTabs [role="tab"][aria-selected="true"] p {{ color: #fff !important; font-weight: 600; }}
-.stTabs [role="tab"][aria-selected="true"] p span[role="img"] {{ color: #3f5414; background: #f5e6b8; }}
+.stTabs [role="tab"][aria-selected="true"] p span[role="img"] {{ color: #1e3d0c; background: #f5e6b8; }}
 .stTabs [role="tabpanel"] {{ padding-top: 18px; }}
 
 .gaea-kpi-rangee {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; margin-bottom: 10px; }}
@@ -1925,14 +1925,14 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
     padding: 10px; border-radius: 999px; text-decoration: none !important;
     font-weight: 600; font-size: 0.88rem; color: #fff !important;
     background: linear-gradient(135deg, {GAEA_CORP["accent"]}, {GAEA_CORP["accent_dark"]});
-    box-shadow: 0 14px 28px -12px rgba(77,101,25,0.85), 0 0 0 4px rgba(212,160,23,0.18);
+    box-shadow: 0 14px 28px -12px rgba(39,78,19,0.85), 0 0 0 4px rgba(191,144,0,0.18);
     transition: transform 0.2s ease, box-shadow 0.2s ease; }}
 .gaea-retour-onglets span {{ display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-    border-radius: 50%; background: #f5e6b8; color: #3f5414; font-weight: 800; }}
+    border-radius: 50%; background: #f5e6b8; color: #1e3d0c; font-weight: 800; }}
 /* Replié en pastille pour ne pas cacher le texte ; le libellé apparaît au survol. */
 .gaea-retour-onglets em {{ max-width: 0; overflow: hidden; white-space: nowrap; font-style: normal; transition: max-width 0.2s ease; }}
 .gaea-retour-onglets:hover em {{ max-width: 90px; padding: 0 8px; }}
-.gaea-retour-onglets:hover {{ transform: translateY(-3px); box-shadow: 0 18px 32px -12px rgba(77,101,25,0.9), 0 0 0 5px rgba(212,160,23,0.25); }}
+.gaea-retour-onglets:hover {{ transform: translateY(-3px); box-shadow: 0 18px 32px -12px rgba(39,78,19,0.9), 0 0 0 5px rgba(191,144,0,0.25); }}
 @media print {{ .gaea-retour-onglets {{ display: none !important; }} }}
 
 /* ---------- Volets « En savoir plus » ---------- */
@@ -1944,10 +1944,10 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
 
 /* ---------- Pied de page ---------- */
 .gaea-pied {{ position: relative; overflow: hidden; margin: 30px 0 10px 0; padding: 22px 28px; border-radius: 20px; color: #fff;
-    background: linear-gradient(125deg, #3f5414 0%, {GAEA_CORP["accent_dark"]} 55%, {GAEA_CORP["accent"]} 100%);
+    background: linear-gradient(125deg, #1e3d0c 0%, {GAEA_CORP["accent_dark"]} 55%, {GAEA_CORP["accent"]} 100%);
     box-shadow: 0 16px 34px -20px rgba(46,43,38,0.6); }}
 .gaea-pied::after {{ content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
-    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #d4a017 50%, {GAEA_CORP["brown"]}); }}
+    background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #bf9000 50%, {GAEA_CORP["brown"]}); }}
 .gaea-pied-titre {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.25rem; font-weight: 700; }}
 .gaea-pied-texte {{ font-size: 0.9rem; color: rgba(255,255,255,0.85); margin-top: 6px; max-width: 760px; line-height: 1.5; }}
 .gaea-pied-source {{ font-size: 0.78rem; color: rgba(255,255,255,0.7); margin-top: 10px; }}
@@ -1962,7 +1962,7 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
 /* ---------- Encart « À retenir » ---------- */
 .gaea-frise {{ position: relative; padding: 6px 0 4px 0; }}
 .gaea-frise::before {{ content: ""; position: absolute; left: 21px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px;
-    background: linear-gradient(180deg, #d4a017, {GAEA_CORP["accent_dark"]} 60%, rgba(77,101,25,0.15)); }}
+    background: linear-gradient(180deg, #bf9000, {GAEA_CORP["accent_dark"]} 60%, rgba(39,78,19,0.15)); }}
 .gaea-frise-etape {{ position: relative; display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px;
     animation: gaeaApparition 0.55s ease-out both; }}
 .gaea-frise-etape:nth-child(2) {{ animation-delay: 0.08s; }} .gaea-frise-etape:nth-child(3) {{ animation-delay: 0.16s; }}
@@ -1970,20 +1970,20 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
 .gaea-frise-point {{ position: relative; z-index: 1; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: #fbf8f1;
     border: 3px solid {GAEA_CORP["accent_dark"]}; box-shadow: 0 8px 18px -10px rgba(46,43,38,0.6); }}
-.gaea-frise-nouveau .gaea-frise-point {{ border-color: #d4a017; background: #fff6dc; animation: gaeaPulsation 2.4s ease-in-out infinite; }}
-@keyframes gaeaPulsation {{ 0%, 100% {{ box-shadow: 0 0 0 0 rgba(212,160,23,0.45); }} 50% {{ box-shadow: 0 0 0 9px rgba(212,160,23,0); }} }}
+.gaea-frise-nouveau .gaea-frise-point {{ border-color: #bf9000; background: #fff6dc; animation: gaeaPulsation 2.4s ease-in-out infinite; }}
+@keyframes gaeaPulsation {{ 0%, 100% {{ box-shadow: 0 0 0 0 rgba(191,144,0,0.45); }} 50% {{ box-shadow: 0 0 0 9px rgba(191,144,0,0); }} }}
 .gaea-frise-carte {{ flex: 1; padding: 12px 16px; border-radius: 16px; background: #fff; border: 1px solid rgba(46,43,38,0.07);
     box-shadow: 0 12px 26px -22px rgba(46,43,38,0.55); transition: transform 0.2s ease, box-shadow 0.2s ease; }}
-.gaea-frise-carte:hover {{ transform: translateX(4px); box-shadow: 0 16px 30px -18px rgba(77,101,25,0.45); }}
-.gaea-frise-nouveau .gaea-frise-carte {{ background: linear-gradient(120deg, #fffaf0, #fff); border-color: rgba(212,160,23,0.45); }}
+.gaea-frise-carte:hover {{ transform: translateX(4px); box-shadow: 0 16px 30px -18px rgba(39,78,19,0.45); }}
+.gaea-frise-nouveau .gaea-frise-carte {{ background: linear-gradient(120deg, #fffaf0, #fff); border-color: rgba(191,144,0,0.45); }}
 .gaea-frise-tag {{ display: inline-block; font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
-    color: {GAEA_CORP["accent_dark"]}; background: rgba(77,101,25,0.10); padding: 2px 9px; border-radius: 999px; }}
+    color: {GAEA_CORP["accent_dark"]}; background: rgba(39,78,19,0.10); padding: 2px 9px; border-radius: 999px; }}
 .gaea-frise-nouveau .gaea-frise-tag {{ color: #6b4e00; background: #f5e6b8; }}
 .gaea-frise-titre {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.08rem; font-weight: 700; color: #2e2b26; margin: 5px 0 2px 0; }}
 .gaea-frise-carte p {{ margin: 0; font-size: 0.88rem; line-height: 1.5; color: rgba(46,43,38,0.78); }}
 .gaea-frise-liste {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; margin-top: 8px; }}
 .gaea-frise-liste > div {{ display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 12px;
-    background: rgba(245,230,184,0.28); border: 1px solid rgba(212,160,23,0.22); transition: background 0.2s ease; }}
+    background: rgba(245,230,184,0.28); border: 1px solid rgba(191,144,0,0.22); transition: background 0.2s ease; }}
 .gaea-frise-liste > div:hover {{ background: rgba(245,230,184,0.55); }}
 .gaea-frise-liste span {{ flex: 0 0 auto; width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center;
     justify-content: center; font-size: 0.95rem; background: #fff; box-shadow: 0 4px 10px -6px rgba(46,43,38,0.5); }}
@@ -1993,7 +1993,7 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
     background: rgba(245,230,184,0.35); box-shadow: 0 16px 30px -20px rgba(46,43,38,0.6); margin: 4px 0 14px 0;
     animation: gaeaApparition 0.55s ease-out both; }}
 .gaea-methodo-bandeau > div {{ padding: 16px 12px; text-align: center; color: #fff;
-    background: linear-gradient(135deg, #3f5414, {GAEA_CORP["accent_dark"]}); }}
+    background: linear-gradient(135deg, #1e3d0c, {GAEA_CORP["accent_dark"]}); }}
 .gaea-methodo-bandeau b {{ display: block; font-family: 'Fraunces', Georgia, serif; font-size: 1.9rem; line-height: 1.1;
     background: linear-gradient(90deg, #fff, #f5e6b8); -webkit-background-clip: text; background-clip: text; color: transparent; }}
 .gaea-methodo-bandeau span {{ font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(245,240,230,0.82); }}
@@ -2002,7 +2002,7 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
 .gaea-bandeau-face i {{ display: block; margin-top: 2px; font-size: 0.66rem; font-style: normal; color: rgba(245,230,184,0.7); }}
 .gaea-bandeau-dos {{ position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center;
     gap: 5px; padding: 8px; opacity: 0; transform: translateY(8px); pointer-events: none; }}
-.gaea-bandeau-dos em {{ font-style: normal; font-size: 0.74rem; font-weight: 600; color: #33440f; background: #f5e6b8;
+.gaea-bandeau-dos em {{ font-style: normal; font-size: 0.74rem; font-weight: 600; color: #1a330a; background: #f5e6b8;
     padding: 3px 9px; border-radius: 999px; }}
 .gaea-bandeau-survol:hover .gaea-bandeau-face, .gaea-bandeau-survol:focus .gaea-bandeau-face {{ opacity: 0; transform: translateY(-8px); }}
 .gaea-bandeau-survol:hover .gaea-bandeau-dos, .gaea-bandeau-survol:focus .gaea-bandeau-dos {{ opacity: 1; transform: none; }}
@@ -2027,28 +2027,28 @@ div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {{ color: {
 .gaea-fiche-jauge-tete b {{ color: #2e2b26; }}
 .gaea-fiche-piste {{ position: relative; height: 8px; margin-top: 4px; border-radius: 999px; background: rgba(46,43,38,0.08); }}
 .gaea-fiche-rempli {{ height: 100%; border-radius: 999px; }}
-.gaea-fiche-rempli.bien {{ background: linear-gradient(90deg, #9cc35a, {GAEA_CORP["accent_dark"]}); }}
+.gaea-fiche-rempli.bien {{ background: linear-gradient(90deg, #6aa84f, {GAEA_CORP["accent_dark"]}); }}
 .gaea-fiche-rempli.moins {{ background: linear-gradient(90deg, #d98a9c, {GAEA_CORP["accent_rouge"]}); }}
-.gaea-fiche-repere {{ position: absolute; top: -3px; width: 3px; height: 14px; border-radius: 2px; background: #d4a017;
+.gaea-fiche-repere {{ position: absolute; top: -3px; width: 3px; height: 14px; border-radius: 2px; background: #bf9000;
     transform: translateX(-50%); box-shadow: 0 0 0 2px #fff; }}
 .gaea-alerte {{ margin: 4px 0 16px 0; padding: 12px 16px; border-radius: 14px; font-size: 0.92rem; line-height: 1.5;
-    color: #2e2b26; background: linear-gradient(120deg, rgba(77,101,25,0.10), rgba(255,255,255,0.7));
-    border: 1px solid rgba(77,101,25,0.22); border-left: 4px solid {GAEA_CORP["accent_dark"]}; }}
+    color: #2e2b26; background: linear-gradient(120deg, rgba(39,78,19,0.10), rgba(255,255,255,0.7));
+    border: 1px solid rgba(39,78,19,0.22); border-left: 4px solid {GAEA_CORP["accent_dark"]}; }}
 .gaea-alerte b {{ color: {GAEA_CORP["accent_dark"]}; }}
 .gaea-methodo-onglets {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }}
 .gaea-methodo-onglets span {{ font-size: 0.78rem; font-weight: 600; color: {GAEA_CORP["accent_dark"]}; background: #fff;
-    border: 1px solid rgba(77,101,25,0.25); padding: 4px 11px; border-radius: 999px; }}
+    border: 1px solid rgba(39,78,19,0.25); padding: 4px 11px; border-radius: 999px; }}
 .gaea-methodo-grille {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }}
 .gaea-methodo-carte {{ position: relative; overflow: hidden; padding: 16px 16px 14px 16px; border-radius: 16px; background: #fff;
     border: 1px solid rgba(46,43,38,0.07); box-shadow: 0 12px 26px -22px rgba(46,43,38,0.55);
     transition: transform 0.2s ease, box-shadow 0.2s ease; animation: gaeaApparition 0.55s ease-out both; }}
 .gaea-methodo-carte::before {{ content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
-    background: linear-gradient(90deg, {GAEA_CORP["accent_dark"]}, #d4a017); }}
-.gaea-methodo-carte:hover {{ transform: translateY(-4px); box-shadow: 0 20px 34px -20px rgba(77,101,25,0.5); }}
-.gaea-methodo-carte:nth-child(3)::before {{ background: linear-gradient(90deg, #b8860b, #8b6b4a); }}
+    background: linear-gradient(90deg, {GAEA_CORP["accent_dark"]}, #bf9000); }}
+.gaea-methodo-carte:hover {{ transform: translateY(-4px); box-shadow: 0 20px 34px -20px rgba(39,78,19,0.5); }}
+.gaea-methodo-carte:nth-child(3)::before {{ background: linear-gradient(90deg, #bf9000, #7f7f7f); }}
 .gaea-sources {{ position: relative; overflow: hidden; margin-bottom: 14px; padding: 18px 18px 16px 18px; border-radius: 20px; color: #fff;
-    background: radial-gradient(circle at 100% 0%, rgba(212,160,23,0.28) 0, rgba(212,160,23,0) 45%),
-        linear-gradient(135deg, #33440f, {GAEA_CORP["accent_dark"]});
+    background: radial-gradient(circle at 100% 0%, rgba(191,144,0,0.28) 0, rgba(191,144,0,0) 45%),
+        linear-gradient(135deg, #1a330a, {GAEA_CORP["accent_dark"]});
     box-shadow: 0 18px 34px -20px rgba(46,43,38,0.65); animation: gaeaApparition 0.55s ease-out both; }}
 .gaea-sources-titre {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.15rem; font-weight: 700; margin-bottom: 12px; }}
 .gaea-sources-grille {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }}
@@ -2063,7 +2063,7 @@ a.gaea-source:hover {{ transform: translateY(-3px); background: rgba(255,255,255
 .gaea-source-nom {{ font-family: 'Fraunces', Georgia, serif; font-size: 1rem; font-weight: 700; color: #fff; }}
 a.gaea-source p {{ margin: 0; font-size: 0.8rem; line-height: 1.45; color: rgba(255,255,255,0.82); }}
 .gaea-methodo-icone {{ width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-    font-size: 1.15rem; background: rgba(77,101,25,0.10); margin-bottom: 8px; }}
+    font-size: 1.15rem; background: rgba(39,78,19,0.10); margin-bottom: 8px; }}
 .gaea-methodo-titre {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #2e2b26; margin-bottom: 4px; }}
 .gaea-methodo-carte p {{ margin: 0; font-size: 0.86rem; line-height: 1.5; color: rgba(46,43,38,0.78); }}
 .gaea-methodo-carte a {{ color: {GAEA_CORP["accent_dark"]}; font-weight: 600; }}
@@ -2075,19 +2075,19 @@ a.gaea-source p {{ margin: 0; font-size: 0.8rem; line-height: 1.45; color: rgba(
 .stTabs [role="tabpanel"] {{ animation: gaeaOnglet 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }}
 @keyframes gaeaOnglet {{ from {{ opacity: 0; transform: translateY(26px); }} to {{ opacity: 1; transform: none; }} }}
 .stTabs [role="tab"][aria-selected="true"] {{ animation: gaeaOngletActif 0.5s ease-out; }}
-@keyframes gaeaOngletActif {{ from {{ box-shadow: 0 0 0 0 rgba(212, 160, 23, 0.6); }} to {{ box-shadow: 0 0 0 14px rgba(212, 160, 23, 0); }} }}
+@keyframes gaeaOngletActif {{ from {{ box-shadow: 0 0 0 0 rgba(191, 144, 0, 0.6); }} to {{ box-shadow: 0 0 0 14px rgba(191, 144, 0, 0); }} }}
 /* Barre dorée de progression de la lecture, remplie par le script de la page d'ouverture. */
 #gaea-lecture {{ position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 999990; pointer-events: none;
-    transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, {GAEA_CORP["accent"]}, #d4a017, #f5e6b8); }}
+    transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, {GAEA_CORP["accent"]}, #bf9000, #f5e6b8); }}
 @media print {{ #gaea-lecture {{ display: none; }} }}
 @media (prefers-reduced-motion: reduce) {{ .stTabs [role="tabpanel"], .stTabs [role="tab"] {{ animation: none !important; }} }}
 .gaea-retenir {{ position: relative; display: flex; align-items: flex-start; gap: 14px; margin: 12px 0 22px 0;
     padding: 14px 18px 14px 16px; border-radius: 16px;
-    background: linear-gradient(100deg, rgba(212,160,23,0.16), rgba(212,160,23,0.04) 60%, rgba(255,255,255,0.5));
-    border: 1px solid rgba(212,160,23,0.35); box-shadow: 0 10px 22px -18px rgba(139,107,74,0.7); }}
+    background: linear-gradient(100deg, rgba(191,144,0,0.16), rgba(191,144,0,0.04) 60%, rgba(255,255,255,0.5));
+    border: 1px solid rgba(191,144,0,0.35); box-shadow: 0 10px 22px -18px rgba(127,127,127,0.7); }}
 .gaea-retenir::before {{ content: "★"; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; border-radius: 50%; background: #d4a017; color: #fff; font-size: 0.95rem;
-    box-shadow: 0 0 0 5px rgba(212,160,23,0.18); }}
+    width: 30px; height: 30px; border-radius: 50%; background: #bf9000; color: #fff; font-size: 0.95rem;
+    box-shadow: 0 0 0 5px rgba(191,144,0,0.18); }}
 .gaea-retenir-titre {{ font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700;
     color: {GAEA_CORP["brown"]}; margin-bottom: 2px; }}
 .gaea-retenir-texte {{ font-size: 0.95rem; line-height: 1.55; color: {GAEA_CORP["text"]}; }}
@@ -2126,7 +2126,7 @@ a.gaea-source p {{ margin: 0; font-size: 0.8rem; line-height: 1.45; color: rgba(
 /* ---------- Boutons ---------- */
 .stButton button, .stDownloadButton button {{ background: linear-gradient(135deg, {GAEA_CORP["accent"]}, {GAEA_CORP["accent_dark"]}) !important;
     color: white !important; border: 0 !important; font-weight: 600 !important;
-    box-shadow: 0 8px 18px -10px rgba(77, 101, 25, 0.8); transition: transform 0.15s ease, filter 0.15s ease; }}
+    box-shadow: 0 8px 18px -10px rgba(39, 78, 19, 0.8); transition: transform 0.15s ease, filter 0.15s ease; }}
 .stButton button:hover, .stDownloadButton button:hover {{ filter: brightness(1.06); transform: translateY(-1px); }}
 .stButton button p, .stDownloadButton button p {{ color: white !important; }}
 
@@ -2136,16 +2136,16 @@ section[data-testid="stSidebar"] [data-testid="stImage"] img {{ background: #fff
 section[data-testid="stSidebar"] {{
     background:
         radial-gradient(circle at 15% 0%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0) 38%),
-        radial-gradient(circle at 100% 85%, rgba(212,160,23,0.22) 0, rgba(212,160,23,0) 40%),
+        radial-gradient(circle at 100% 85%, rgba(191,144,0,0.22) 0, rgba(191,144,0,0) 40%),
         radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1.2px) 0 0 / 16px 16px,
-        linear-gradient(180deg, #33440f 0%, {GAEA_CORP["accent_dark"]} 55%, #5c7a21 100%) !important;
-    border-right: 3px solid #d4a017; }}
+        linear-gradient(180deg, #1a330a 0%, {GAEA_CORP["accent_dark"]} 55%, #5c7a21 100%) !important;
+    border-right: 3px solid #bf9000; }}
 section[data-testid="stSidebar"] > div {{ background: transparent !important; }}
 section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {{ color: #f5e6b8; }}
 .gaea-filtres-titre {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.6rem; font-weight: 700; color: #fff;
     margin: 16px 0 0 2px; letter-spacing: 0.01em; }}
 .gaea-filtres-titre::after {{ content: ""; display: block; width: 46px; height: 3px; border-radius: 3px; margin-top: 6px;
-    background: linear-gradient(90deg, #d4a017, #f5e6b8); }}
+    background: linear-gradient(90deg, #bf9000, #f5e6b8); }}
 .gaea-filtres-sous-titre {{ font-size: 0.8rem; color: rgba(245,240,230,0.78); margin: 8px 0 14px 2px; line-height: 1.45; }}
 .gaea-sel {{ margin: 6px 0 12px 0; padding: 14px 14px 12px 14px; border-radius: 16px;
     background: rgba(255,255,255,0.10); border: 1px solid rgba(245,230,184,0.35); backdrop-filter: blur(6px); }}
@@ -2153,15 +2153,15 @@ section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {{ 
 .gaea-sel-chiffres {{ font-size: 0.92rem; color: rgba(255,255,255,0.88); margin: 4px 0 8px 0; }}
 .gaea-sel-chiffres b {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.15rem; color: #fff; }}
 .gaea-sel-liste {{ display: flex; flex-wrap: wrap; gap: 6px; }}
-.gaea-sel-pays {{ font-size: 0.76rem; font-weight: 600; color: #3f5414; background: #f5e6b8; padding: 3px 10px;
+.gaea-sel-pays {{ font-size: 0.76rem; font-weight: 600; color: #1e3d0c; background: #f5e6b8; padding: 3px 10px;
     border-radius: 999px; }}
 .gaea-jauge-legende {{ display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px;
     font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(245,240,230,0.8); }}
 .gaea-jauge-legende b {{ font-family: 'Fraunces', Georgia, serif; font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: #fff; }}
 .gaea-jauge {{ position: relative; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.18); margin: 6px 0 6px 0; overflow: visible; }}
-.gaea-jauge-rempli {{ height: 100%; border-radius: 999px; background: linear-gradient(90deg, #9cc35a, #f5e6b8);
+.gaea-jauge-rempli {{ height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6aa84f, #f5e6b8);
     box-shadow: 0 0 12px rgba(245,230,184,0.55); }}
-.gaea-jauge-repere {{ position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px; background: #d4a017;
+.gaea-jauge-repere {{ position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px; background: #bf9000;
     transform: translateX(-50%); box-shadow: 0 0 0 2px rgba(51,68,15,0.6); }}
 .gaea-jauge-note {{ font-size: 0.72rem; color: rgba(245,240,230,0.72); line-height: 1.4; }}
 .gaea-guide > div {{ display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }}
@@ -2170,14 +2170,14 @@ section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {{ 
 .gaea-guide p {{ margin: 0; font-size: 0.84rem; line-height: 1.45; }}
 section[data-testid="stSidebar"] [data-testid="stButtonGroup"] button {{ font-size: 0.8rem; }}
 .gaea-filtres-note {{ font-size: 0.74rem; color: rgba(245,240,230,0.7); margin: 10px 2px 4px 2px; line-height: 1.45; }}
-section[data-testid="stSidebar"] .stButton button {{ background: linear-gradient(135deg, #e0b23a, #b8860b) !important;
+section[data-testid="stSidebar"] .stButton button {{ background: linear-gradient(135deg, #e0b23a, #bf9000) !important;
     color: #2e2b26 !important; box-shadow: 0 10px 22px -10px rgba(0,0,0,0.55) !important; }}
 section[data-testid="stSidebar"] .stButton button p, section[data-testid="stSidebar"] .stButton button span {{ color: #2e2b26 !important; }}
 .gaea-filtre-entete {{ display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.12em;
     text-transform: uppercase; color: {GAEA_CORP["accent_dark"]}; margin: 2px 0 8px 0; }}
 .gaea-filtre-num {{ display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
     font-size: 0.78rem; letter-spacing: 0; color: #fff; background: linear-gradient(135deg, {GAEA_CORP["accent"]}, {GAEA_CORP["accent_dark"]});
-    box-shadow: 0 0 0 3px rgba(212,160,23,0.25); }}
+    box-shadow: 0 0 0 3px rgba(191,144,0,0.25); }}
 section[data-testid="stSidebar"] [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {{ background: #fbf8f1;
     border-radius: 18px !important; border: 1px solid rgba(245,230,184,0.6) !important;
     box-shadow: 0 16px 30px -18px rgba(0,0,0,0.6); padding: 14px 14px 10px 14px !important; margin-bottom: 6px; }}
@@ -2203,7 +2203,7 @@ OUVERTURE_STREAMLIT = """
 <template id="gaea-ouverture">
 <style>
 #gaea-rideau { position: fixed; inset: 0; z-index: 999999; overflow: hidden; color: #fff; font-family: 'Inter', 'Segoe UI', sans-serif; }
-#gaea-rideau .volet { position: absolute; top: 0; bottom: 0; width: 50.5%; background: #16230f; transition: transform 1s cubic-bezier(0.7, 0, 0.2, 1) 0.25s; }
+#gaea-rideau .volet { position: absolute; top: 0; bottom: 0; width: 50.5%; background: #132a0b; transition: transform 1s cubic-bezier(0.7, 0, 0.2, 1) 0.25s; }
 #gaea-rideau .volet.g { left: 0; }
 #gaea-rideau .volet.d { right: 0; }
 #gaea-rideau.ouvert { pointer-events: none; }
@@ -2227,7 +2227,7 @@ OUVERTURE_STREAMLIT = """
 #gaea-rideau .perimetre { font-size: clamp(13px, 1.7vw, 16px); color: rgba(255, 255, 255, 0.9); animation: gaeaMontee 0.8s 1.35s both; }
 #gaea-rideau .attente { width: 200px; height: 4px; margin-top: 20px; overflow: hidden; border-radius: 4px; background: rgba(255, 255, 255, 0.25); }
 #gaea-rideau .attente i { display: block; width: 40%; height: 100%; border-radius: 4px; background: #f5e6b8; animation: gaeaAttente 1.3s ease-in-out infinite; }
-#gaea-rideau button { display: none; margin-top: 16px; padding: 15px 46px; border: 0; border-radius: 999px; cursor: pointer; font: 700 19px 'Inter', 'Segoe UI', sans-serif; color: #16230f; background: linear-gradient(135deg, #fbeec6, #d4a017); animation: gaeaMontee 0.6s both, gaeaAppel 2.4s 0.7s ease-in-out infinite; transition: transform 0.25s ease; }
+#gaea-rideau button { display: none; margin-top: 16px; padding: 15px 46px; border: 0; border-radius: 999px; cursor: pointer; font: 700 19px 'Inter', 'Segoe UI', sans-serif; color: #132a0b; background: linear-gradient(135deg, #fbeec6, #bf9000); animation: gaeaMontee 0.6s both, gaeaAppel 2.4s 0.7s ease-in-out infinite; transition: transform 0.25s ease; }
 #gaea-rideau.pret button { display: inline-block; }
 #gaea-rideau.pret .attente { display: none; }
 #gaea-rideau button:hover { transform: scale(1.07); }
@@ -2239,7 +2239,7 @@ OUVERTURE_STREAMLIT = """
 @keyframes gaeaMontee { from { opacity: 0; transform: translateY(22px); } }
 @keyframes gaeaFilet { from { transform: scaleX(0); } }
 @keyframes gaeaAttente { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
-@keyframes gaeaAppel { 50% { box-shadow: 0 0 0 16px rgba(212, 160, 23, 0), 0 0 34px rgba(245, 230, 184, 0.7); } 0%, 100% { box-shadow: 0 0 0 0 rgba(212, 160, 23, 0.55); } }
+@keyframes gaeaAppel { 50% { box-shadow: 0 0 0 16px rgba(191, 144, 0, 0), 0 0 34px rgba(245, 230, 184, 0.7); } 0%, 100% { box-shadow: 0 0 0 0 rgba(191, 144, 0, 0.55); } }
 @media (max-height: 620px) { #gaea-rideau .question, #gaea-rideau .perimetre { display: none; } }
 @media (prefers-reduced-motion: reduce) {
     #gaea-rideau *, #gaea-rideau { animation: none !important; transition: none !important; }
@@ -2269,8 +2269,8 @@ OUVERTURE_STREAMLIT = """
                     <g class="pale" style="transform-origin: 1295px 145px"><path d="M1293 145 L1295 67 L1299 143 Z M1295 143 L1364 186 L1291 148 Z M1297 147 L1226 185 L1293 142 Z"/></g>
                 </g>
             </g>
-            <path d="M0 360 C300 300 620 370 900 325 C1180 285 1380 345 1600 305 V420 H0 Z" fill="#16230f"/>
-            <g fill="#27401b" stroke="#d4a017" stroke-width="1.4" stroke-opacity="0.65">
+            <path d="M0 360 C300 300 620 370 900 325 C1180 285 1380 345 1600 305 V420 H0 Z" fill="#132a0b"/>
+            <g fill="#27401b" stroke="#bf9000" stroke-width="1.4" stroke-opacity="0.65">
                 <path d="M520 372 l66 -10 l30 30 l-72 12 z"/><path d="M620 362 l66 -10 l30 30 l-72 12 z"/><path d="M720 352 l66 -10 l30 30 l-72 12 z"/><path d="M820 343 l66 -10 l30 30 l-72 12 z"/>
             </g>
         </svg>
@@ -2457,15 +2457,15 @@ def mini_courbe_svg(serie, largeur=360, hauteur=150):
         f'<svg viewBox="0 0 {largeur} {hauteur}" width="100%" preserveAspectRatio="none" role="img" '
         f'aria-label="Part moyenne des renouvelables de {annees[0]} à {annees[-1]}">'
         '<defs><linearGradient id="gaeaAire" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0%" stop-color="#d4a017" stop-opacity="0.45"/>'
-        '<stop offset="100%" stop-color="#d4a017" stop-opacity="0"/></linearGradient></defs>'
+        '<stop offset="0%" stop-color="#bf9000" stop-opacity="0.45"/>'
+        '<stop offset="100%" stop-color="#bf9000" stop-opacity="0"/></linearGradient></defs>'
         f'<polygon points="{aire}" fill="url(#gaeaAire)"/>'
         + reperes +
         f'<polyline points="{ligne}" fill="none" stroke="#f5e6b8" stroke-width="2.6" '
         'stroke-linejoin="round" stroke-linecap="round"/>'
         f'<circle cx="{x0:.1f}" cy="{y0:.1f}" r="4" fill="#fff"/>'
-        f'<circle cx="{x1:.1f}" cy="{y1:.1f}" r="9" fill="#d4a017" opacity="0.35"/>'
-        f'<circle cx="{x1:.1f}" cy="{y1:.1f}" r="5" fill="#d4a017" stroke="#fff" stroke-width="2"/>'
+        f'<circle cx="{x1:.1f}" cy="{y1:.1f}" r="9" fill="#bf9000" opacity="0.35"/>'
+        f'<circle cx="{x1:.1f}" cy="{y1:.1f}" r="5" fill="#bf9000" stroke="#fff" stroke-width="2"/>'
         f'<text x="{x1 - 12:.1f}" y="{y1 + 4:.1f}" fill="#f5e6b8" font-size="12" font-weight="700" '
         f'text-anchor="end">{valeur_fin}</text>'
         f'<text x="{x0:.1f}" y="{hauteur - 2}" fill="rgba(255,255,255,0.7)" font-size="11">{annees[0]}</text>'
@@ -2548,7 +2548,7 @@ def bouton_export_pdf():
                     font-family:'Inter','Segoe UI',sans-serif;">
             <button id="gaeaBtnExport" style="
                 background:linear-gradient(135deg,{GAEA_CORP['accent']},{GAEA_CORP['accent_dark']}); color:white; border:0;
-                border-radius:999px; box-shadow:0 8px 18px -10px rgba(77,101,25,0.8); font-weight:600; padding:10px 18px;
+                border-radius:999px; box-shadow:0 8px 18px -10px rgba(39,78,19,0.8); font-weight:600; padding:10px 18px;
                 font-size:14px; cursor:pointer; white-space:nowrap;
                 font-family:'Inter','Segoe UI',sans-serif;">
                 🖨️ Exporter en PDF / Imprimer
@@ -2972,7 +2972,7 @@ cartes_kpi([
     {"icone": "🌐", "valeur": len(pays_selectionnes), "label": "Pays sélectionnés",
      "couleur": GAEA_CORP["brown"]},
     {"icone": "📊", "valeur": fmt_fr(len(df_filtre), decimales=0), "label": "Observations",
-     "couleur": "#3d346b"},
+     "couleur": "#3c4043"},
     {"icone": "🌱", "valeur": fmt_fr(moy_renouv, decimales=1, suffixe=" %"),
      "label": f"Moy. renouvelables ({derniere_annee})", "delta": _delta_renouv,
      "couleur": GAEA_CORP["accent_dark"]},
@@ -3088,7 +3088,7 @@ with onglet2:
             {"icone": "🔢", "valeur": f"n = {fmt_fr(n, decimales=0)}", "label": "Taille d'échantillon",
              "couleur": GAEA_CORP["accent_dark"]},
             {"icone": "🎯", "valeur": "< 0,001" if p is not None and p < 0.001 else (fmt_fr(p, decimales=3) if p is not None else "n/d"),
-             "label": "p-valeur bilatérale", "couleur": "#3d346b"},
+             "label": "p-valeur bilatérale", "couleur": "#3c4043"},
         ])
 
         if p is not None and p < 0.05:
@@ -3180,7 +3180,7 @@ with onglet3:
             ))
             styles = {
                 "lineaire": dict(color=GAEA_CORP["brown"], dash="dot"),
-                "logistique": dict(color="#d4a017", dash="dash"),
+                "logistique": dict(color="#bf9000", dash="dash"),
             }
             for m in modeles:
                 retenu = m == modele_retenu
@@ -3198,7 +3198,7 @@ with onglet3:
                        "100 %). Le modèle retenu est tracé en gras.")
 
         # Duel des deux modèles : erreur de backtest de chacun
-        _couleurs_modeles = {"lineaire": GAEA_CORP["brown"], "logistique": "#b8860b"}
+        _couleurs_modeles = {"lineaire": GAEA_CORP["brown"], "logistique": "#bf9000"}
         cartes_kpi(
             [{"icone": "🏆" if m == modele_retenu else "📏",
               "valeur": (f"{fmt_fr(v['backtest']['mae'])} pts" if v["backtest"] is not None else "n/d"),
@@ -3211,7 +3211,7 @@ with onglet3:
             [{"icone": "🗓️", "valeur": fmt_fr(val, decimales=1, suffixe=" %"), "label": f"Projection {an}",
               "couleur": c}
              for (an, val), c in zip(zip(annees_futures, projections),
-                                     [GAEA_CORP["accent_dark"], GAEA_CORP["accent"], "#3f5414"])]
+                                     [GAEA_CORP["accent_dark"], GAEA_CORP["accent"], "#1e3d0c"])]
         )
 
         _mae_retenu = avec_backtest.get(modele_retenu)
@@ -3387,7 +3387,7 @@ with onglet_objectif:
         {"icone": "📈", "valeur": fmt_fr(rythme_historique, 2, " pts/an"), "label": "Rythme historique",
          "couleur": GAEA_CORP["brown"]},
         {"icone": "🚀", "valeur": fmt_fr(rythme_necessaire, 2, " pts/an"), "label": "Rythme nécessaire",
-         "couleur": "#3d346b"},
+         "couleur": "#3c4043"},
     ])
 
     with st.container(border=True):
@@ -3517,7 +3517,7 @@ with onglet5:
         parts = parts.div(parts.sum(axis=1), axis=0) * 100
         parts = parts.sort_values("co2_charbon")
         couleurs_sources = {"co2_charbon": "#2e2b26", "co2_petrole": GAEA_CORP["brown"],
-                            "co2_gaz": "#d4a017", "co2_autres": "#c9c2b4"}
+                            "co2_gaz": "#bf9000", "co2_autres": "#c9c2b4"}
         noms_sources = dict(colonnes_sources, co2_autres="Autres (ciment, torchage…)")
         with st.container(border=True):
             fig_sources = go.Figure()
@@ -3586,8 +3586,8 @@ with onglet6:
             "Très renouvelable et peu carboné": GAEA_CORP["accent_dark"],
             "Mix fossile et carboné": GAEA_CORP["accent_rouge"],
             "Transition rapide": GAEA_CORP["accent"],
-            "Grand émetteur avec forte production renouvelable": "#b8860b",
-            "Profil intermédiaire": GAEA_CORP["brown"],
+            "Grand émetteur avec forte production renouvelable": "#bf9000",
+            "Profil intermédiaire": "#b7ad98",
         }
         _medailles = {0: "🥇", 1: "🥈", 2: "🥉"}
         _fiches = []
@@ -3945,7 +3945,7 @@ with onglet8:
             {"icone": "📐", "valeur": fmt_fr(t, decimales=2), "label": "Statistique t (Welch)",
              "couleur": GAEA_CORP["accent_rouge"]},
             {"icone": "🎯", "valeur": "< 0,001" if p < 0.001 else fmt_fr(p, decimales=3), "label": "p-valeur unilatérale",
-             "couleur": "#3d346b"},
+             "couleur": "#3c4043"},
         ])
 
         # Distribution des deux groupes : violon + boîte + points (un point = un pays),
@@ -4074,7 +4074,7 @@ with onglet8:
         {"icone": "📐", "valeur": fmt_fr(t2, decimales=3) if t2 is not None else "n/d", "label": "Statistique t (apparié)",
          "couleur": GAEA_CORP["accent_rouge"]},
         {"icone": "🎯", "valeur": ("< 0,001" if p2 < 0.001 else fmt_fr(p2, decimales=3)) if p2 is not None else "n/d",
-         "label": "p-valeur unilatérale", "couleur": "#3d346b"},
+         "label": "p-valeur unilatérale", "couleur": "#3c4043"},
     ])
 
     # Graphique « haltères » : pour chaque pays, un segment de la valeur de début
@@ -4215,7 +4215,7 @@ with onglet9:
             fig = px.choropleth(
                 donnees_carte_anim, locations="code_iso", color=col_indicateur,
                 hover_name="pays_fr", animation_frame="annee",
-                color_continuous_scale=["#f5f0e6", "#c9d4a8", "#8f9779", "#6b8e23", "#4d6519"],
+                color_continuous_scale=["#f5f0e6", "#c9d4a8", "#999999", "#38761d", "#274e13"],
                 range_color=(vmin, vmax),
                 labels={col_indicateur: libelle_indicateur, "annee": "Année"},
             )

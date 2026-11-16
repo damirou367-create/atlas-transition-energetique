@@ -221,6 +221,7 @@ def continent_de(pays):
 # le fichier qu'une seule fois, même si l'utilisateur change les filtres)
 # ------------------------------------------------------------
 FICHIER_PIB = "data/clean/pib_par_habitant.csv"
+FICHIER_POLITIQUES = "data/clean/politiques_climat.csv"
 
 @st.cache_data(show_spinner="Chargement de la base de données (206 pays, 1990-2024)…")
 def charger_donnees(chemin=FICHIER_BASE):
@@ -242,6 +243,16 @@ def charger_donnees(chemin=FICHIER_BASE):
         df = df.merge(df_pib[["code_iso", "annee", "pib_par_habitant"]], on=["code_iso", "annee"], how="left")
     except FileNotFoundError:
         df["pib_par_habitant"] = np.nan
+
+    # Politiques climatiques (prix du carbone, quotas / certificats verts),
+    # préparées par preparer_politiques_climat.py. Un pays absent des bases
+    # n'a pas d'instrument recensé : 0.
+    try:
+        df_pol = pd.read_csv(FICHIER_POLITIQUES)
+        df = df.merge(df_pol[["code_iso", "annee", "prix_carbone_moyen", "couverture_carbone", "quotas_enr"]],
+                      on=["code_iso", "annee"], how="left")
+    except FileNotFoundError:
+        df["prix_carbone_moyen"], df["couverture_carbone"], df["quotas_enr"] = np.nan, np.nan, np.nan
 
     return df
 
@@ -1142,7 +1153,9 @@ def test_choix_par_pays(_erreurs, coupures=range(2010, 2020)):
 
 
 # Régression « panel » : un seul modèle pour tous les pays, qui prédit la
-# progression des 5 années suivantes à partir de 6 indicateurs du pays.
+# progression des 5 années suivantes à partir d'indicateurs du pays.
+# Les 6 premiers viennent de la base ; les 2 derniers sont des politiques
+# publiques (point d'avancement du 16/11/2026 : prix du carbone et quotas).
 VARIABLES_PANEL = {
     "y": "Niveau actuel des renouvelables",
     "d1": "Progression sur la dernière année",
@@ -1150,7 +1163,11 @@ VARIABLES_PANEL = {
     "ws": "Part solaire + éolien",
     "dws5": "Progression solaire + éolien (5 ans)",
     "lprod": "Électricité produite par habitant (log)",
+    "lprix": "Prix du carbone (log)",
+    "quotas": "Quotas / certificats verts en vigueur",
 }
+VARIABLES_POLITIQUES = ["lprix", "quotas"]
+VARIABLES_SANS_POLITIQUES = [k for k in VARIABLES_PANEL if k not in VARIABLES_POLITIQUES]
 
 
 def _variables_panel(df_base, h=5):
@@ -1161,12 +1178,14 @@ def _variables_panel(df_base, h=5):
     v["ws"] = d["part_solaire_dans_electricite"].fillna(0) + d["part_eolien_dans_electricite"].fillna(0)
     v["dws5"] = v.groupby("pays")["ws"].diff(5)
     v["lprod"] = np.log1p(d["production_totale_electricite"] / d["population"] * 1e9)
+    v["lprix"] = np.log1p(d.get("prix_carbone_moyen", pd.Series(0.0, index=d.index)).fillna(0).clip(lower=0))
+    v["quotas"] = d.get("quotas_enr", pd.Series(0.0, index=d.index)).fillna(0)
     v["cible"] = g.shift(-h) - d[COL_PREVISION]
     return v.dropna(subset=list(VARIABLES_PANEL))
 
 
-def _ajuster_ridge(table, lam=1.0):
-    X = table[list(VARIABLES_PANEL)].to_numpy(dtype=float)
+def _ajuster_ridge(table, variables, lam=1.0):
+    X = table[variables].to_numpy(dtype=float)
     mu, sd = X.mean(0), X.std(0) + 1e-9
     A = np.column_stack([np.ones(len(X)), (X - mu) / sd])
     penalite = np.eye(A.shape[1]); penalite[0, 0] = 0
@@ -1174,24 +1193,50 @@ def _ajuster_ridge(table, lam=1.0):
     return w, mu, sd
 
 
+def _prevoir_ridge(table, variables, w, mu, sd):
+    return np.clip(table["y"].to_numpy() + w[0] + ((table[variables].to_numpy(dtype=float) - mu) / sd) @ w[1:], 0, 100)
+
+
 @st.cache_data(show_spinner="Régression multivariable sur tous les pays…")
 def regression_panel(_df, h=5):
-    """Coefficients standardisés, erreur de backtest (comparée au naïf) et prévision à 5 ans de chaque pays."""
+    """Coefficients standardisés, erreurs de backtest (avec et sans politiques publiques, comparées au naïf
+    sur exactement les mêmes prévisions) et prévision à 5 ans de chaque pays."""
     v = _variables_panel(_df, h)
-    erreurs_panel, erreurs_naif = [], []
+    avec, sans = list(VARIABLES_PANEL), VARIABLES_SANS_POLITIQUES
+    lignes = []
     for origine in range(2014, 2020):  # même protocole que les autres modèles
-        w, mu, sd = _ajuster_ridge(v[(v["annee"] + h <= origine) & v["cible"].notna()])
+        appris = v[(v["annee"] + h <= origine) & v["cible"].notna()]
         test = v[(v["annee"] == origine) & v["cible"].notna()]
-        delta = w[0] + ((test[list(VARIABLES_PANEL)].to_numpy(dtype=float) - mu) / sd) @ w[1:]
         reel = test["y"].to_numpy() + test["cible"].to_numpy()
-        erreurs_panel += list(np.abs(np.clip(test["y"].to_numpy() + delta, 0, 100) - reel))
-        erreurs_naif += list(np.abs(test["cible"].to_numpy()))
-    w, mu, sd = _ajuster_ridge(v[v["cible"].notna()])
+        w_a, mu_a, sd_a = _ajuster_ridge(appris, avec)
+        w_s, mu_s, sd_s = _ajuster_ridge(appris, sans)
+        lignes.append(pd.DataFrame({
+            "pays": test["pays"].to_numpy(), "origine": origine,
+            "avec": np.abs(_prevoir_ridge(test, avec, w_a, mu_a, sd_a) - reel),
+            "sans": np.abs(_prevoir_ridge(test, sans, w_s, mu_s, sd_s) - reel),
+            "naif": np.abs(test["cible"].to_numpy()),
+        }))
+    erreurs = pd.concat(lignes, ignore_index=True)
+    # Intervalle de confiance du gain : on tire des pays au hasard (avec remise), 2 000 fois
+    gain = erreurs["sans"] - erreurs["avec"]
+    par_pays = pd.DataFrame({"gain": gain, "n": 1}).groupby(erreurs["pays"]).sum()
+    tirages = np.random.default_rng(0).integers(0, len(par_pays), size=(2000, len(par_pays)))
+    gains_tires = par_pays["gain"].to_numpy()[tirages].sum(1) / par_pays["n"].to_numpy()[tirages].sum(1)
+    w, mu, sd = _ajuster_ridge(v[v["cible"].notna()], avec)
     derniere = v[v["annee"] == v.groupby("pays")["annee"].transform("max")]
-    prevu = np.clip(derniere["y"].to_numpy() + w[0] + ((derniere[list(VARIABLES_PANEL)].to_numpy(dtype=float) - mu) / sd) @ w[1:], 0, 100)
+    prevu = _prevoir_ridge(derniere, avec, w, mu, sd)
+    annee_max = int(_df["annee"].max())
+    recent = _df[_df["annee"] == annee_max]
     return {
-        "coefficients": pd.Series(w[1:], index=list(VARIABLES_PANEL)),
-        "mae": float(np.mean(erreurs_panel)), "mae_naif": float(np.mean(erreurs_naif)),
+        "coefficients": pd.Series(w[1:], index=avec),
+        "mae": float(erreurs["avec"].mean()), "mae_sans": float(erreurs["sans"].mean()),
+        "mae_naif": float(erreurs["naif"].mean()), "n_previsions": int(len(erreurs)),
+        "n_pays": int(erreurs["pays"].nunique()),
+        "gain_ic95": tuple(np.percentile(gains_tires, [2.5, 97.5])),
+        "par_origine": erreurs.groupby("origine")[["sans", "avec", "naif"]].mean(),
+        "annee_politiques": annee_max,
+        "pays_prix_carbone": int((recent.get("prix_carbone_moyen", pd.Series(dtype=float)).fillna(0) > 0).sum()),
+        "pays_quotas": int((recent.get("quotas_enr", pd.Series(dtype=float)).fillna(0) > 0).sum()),
         "prevision": pd.DataFrame({"pays": derniere["pays"].to_numpy(), "annee": derniere["annee"].to_numpy() + h,
                                    "valeur": prevu}),
     }
@@ -3750,32 +3795,91 @@ with onglet_prevision:
                   "passé : elle ne sert pas à choisir le modèle (voir le test ci-dessus)."
             )
 
-        # ---- 6. La régression multivariable (« panel ») ----
+        # ---- 6. La régression multivariable (« panel ») : avec les politiques publiques ----
         with st.container(border=True):
-            st.markdown("**Régression multivariable : qu'est-ce qui annonce une progression des renouvelables ?**")
-            coefs = panel_ts["coefficients"].sort_values()
-            fig = go.Figure(go.Bar(
-                y=[VARIABLES_PANEL[k] for k in coefs.index], x=coefs.to_numpy(), orientation="h",
-                marker_color=[GAEA_CORP["accent"] if c > 0 else "#595959" for c in coefs],
-                text=[("+" if c > 0 else "") + fmt_fr(c, 2) for c in coefs], textposition="outside",
-                hovertemplate="%{y} : %{x:+.2f} pt<extra></extra>",
-            ))
-            fig = theme_plotly(fig, hauteur=320, titre_x="Effet sur la progression à 5 ans (points, pour un "
-                               "écart-type de la variable)", legende=False)
-            fig.update_layout(hovermode="closest")
-            borne = float(np.abs(coefs).max()) * 1.4
-            fig.update_xaxes(range=[-borne, borne])
-            st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_panel")
-            st.caption("Un seul modèle pour tous les pays (régression ridge en NumPy), qui prédit la progression des "
-                       "5 années suivantes à partir de six indicateurs du pays.")
-        _var_forte = panel_ts["coefficients"].abs().idxmax()
+            st.markdown("**🏛️ Régression multivariable : les politiques publiques améliorent-elles la prévision ?**")
+            _gain = panel_ts["mae_sans"] - panel_ts["mae"]
+            _po = panel_ts["par_origine"]
+            _n_gagnantes = int((_po["sans"] > _po["avec"]).sum())
+            cartes_kpi([
+                {"icone": "🏷️", "valeur": str(panel_ts["pays_prix_carbone"]),
+                 "label": f"pays avec un prix du carbone en {panel_ts['annee_politiques']} (taxe ou marché du CO2)",
+                 "couleur": GAEA_CORP["accent_dark"]},
+                {"icone": "📜", "valeur": str(panel_ts["pays_quotas"]),
+                 "label": f"pays avec des quotas ou certificats verts pour les renouvelables en "
+                          f"{panel_ts['annee_politiques']}", "couleur": GAEA_CORP["accent"]},
+                {"icone": "📉", "valeur": f"{fmt_fr(panel_ts['mae_sans'], 2)} → {fmt_fr(panel_ts['mae'], 2)}",
+                 "label": "points d'erreur à 5 ans, sans puis avec ces deux politiques",
+                 "delta": {"texte": f"−{fmt_fr(_gain, 2)} pt ({fmt_fr(100 * _gain / panel_ts['mae_sans'], 1)} %)",
+                           "sens": "baisse"}, "couleur": "#45818e"},
+                {"icone": "✅", "valeur": f"{_n_gagnantes}/{len(_po)}",
+                 "label": "années de test où la prévision s'améliore", "couleur": "#bf9000"},
+            ])
+            col_coef, col_test = st.columns([1.05, 1])
+            with col_coef:
+                coefs = panel_ts["coefficients"].sort_values()
+                _nouveau = [k in VARIABLES_POLITIQUES for k in coefs.index]
+                fig = go.Figure(go.Bar(
+                    y=[("🆕 " if n else "") + VARIABLES_PANEL[k] for k, n in zip(coefs.index, _nouveau)],
+                    x=coefs.to_numpy(), orientation="h",
+                    marker_color=["#bf9000" if n else (GAEA_CORP["accent"] if c > 0 else "#595959")
+                                  for c, n in zip(coefs, _nouveau)],
+                    text=[("+" if c > 0 else "") + fmt_fr(c, 2) for c in coefs], textposition="outside",
+                    hovertemplate="%{y} : %{x:+.2f} pt<extra></extra>",
+                ))
+                fig = theme_plotly(fig, hauteur=360, titre_x="Effet sur la progression à 5 ans (points)", legende=False)
+                fig.update_layout(hovermode="closest")
+                borne = float(np.abs(coefs).max()) * 1.45
+                fig.update_xaxes(range=[-borne, borne])
+                st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_panel")
+                st.caption("En doré, les deux politiques publiques ajoutées. Effet en points de progression à 5 ans pour un "
+                           "écart-type de la variable ; un seul modèle pour tous les pays (régression ridge en NumPy).")
+            with col_test:
+                fig2 = go.Figure()
+                fig2.add_trace(go.Bar(x=_po.index, y=_po["sans"], name="Sans les politiques",
+                                      marker_color="#c2baa9",
+                                      hovertemplate="Prévision faite en %{x} : %{y:.2f} pts<extra>sans les politiques</extra>"))
+                fig2.add_trace(go.Bar(x=_po.index, y=_po["avec"], name="Avec prix du carbone et quotas",
+                                      marker_color="#bf9000",
+                                      hovertemplate="Prévision faite en %{x} : %{y:.2f} pts<extra>avec les politiques</extra>"))
+                fig2.add_trace(go.Scatter(x=_po.index, y=_po["naif"], name="Naïf (rien ne change)", mode="markers",
+                                          marker=dict(symbol="line-ew-open", size=26, color="#2e2b26", line=dict(width=3, color="#2e2b26")),
+                                          hovertemplate="Prévision faite en %{x} : %{y:.2f} pts<extra>naïf</extra>"))
+                fig2 = theme_plotly(fig2, hauteur=360, titre_x="Année d'où part la prévision à 5 ans",
+                                    titre_y="Erreur moyenne (points)")
+                fig2.update_layout(barmode="group", hovermode="closest",
+                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0))
+                _ymin = float(_po.min().min())
+                fig2.update_yaxes(range=[max(0.0, _ymin - 1.0), float(_po.max().max()) + 0.4])
+                fig2.update_xaxes(dtick=1)
+                st.plotly_chart(fig2, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_politiques")
+                st.caption(f"Backtest : {fmt_fr(panel_ts['n_previsions'], 0)} prévisions à 5 ans, {panel_ts['n_pays']} pays, "
+                           "chacune faite sans connaître la suite. Axe vertical tronqué pour rendre les écarts lisibles.")
+        _lo, _hi = panel_ts["gain_ic95"]
+        _rang = panel_ts["coefficients"].abs().sort_values(ascending=False)
+        _pol_forte = panel_ts["coefficients"][VARIABLES_POLITIQUES].abs().idxmax()
+        _pos = int(list(_rang.index).index(_pol_forte)) + 1
+        _devant = [VARIABLES_PANEL[k] for k in _rang.index[:_pos - 1]]
         narratif(
-            f"La variable la plus utile est <b>« {VARIABLES_PANEL[_var_forte]} »</b> : un pays déjà engagé dans "
-            f"le solaire et l'éolien continue de progresser. À l'inverse, un niveau actuel élevé freine la "
-            f"progression (on approche du plafond). En backtest, la régression se trompe de "
-            f"<b>{fmt_fr(panel_ts['mae'], 2)} points</b> à 5 ans contre <b>{fmt_fr(panel_ts['mae_naif'], 2)}</b> "
-            f"pour le naïf sur les mêmes pays : l'information en plus n'apporte qu'un <b>petit gain</b>."
+            f"Sur les {len(_rang)} indicateurs, <b>« {VARIABLES_PANEL[_pol_forte]} »</b> est le "
+            f"<b>{'plus influent' if _pos == 1 else f'{_pos}e plus influent'}</b> "
+            f"({'+' if panel_ts['coefficients'][_pol_forte] > 0 else ''}"
+            f"{fmt_fr(panel_ts['coefficients'][_pol_forte], 2)} point)"
+            + (f", juste derrière « {' » et « '.join(_devant)} »" if _devant else "")
+            + " : à situation égale, les pays qui font payer le carbone ont vu leurs renouvelables progresser plus "
+            f"vite. Avec le prix du carbone et les quotas, l'erreur à 5 ans passe de "
+            f"<b>{fmt_fr(panel_ts['mae_sans'], 2)}</b> à <b>{fmt_fr(panel_ts['mae'], 2)} points</b> "
+            f"(naïf : {fmt_fr(panel_ts['mae_naif'], 2)}), et la prévision s'améliore lors de <b>{_n_gagnantes} des "
+            f"{len(_po)} années testées</b>. Le gain est modeste mais réel : en refaisant le calcul 2 000 fois sur des "
+            f"pays tirés au hasard, il reste compris entre <b>{fmt_fr(_lo, 2)} et {fmt_fr(_hi, 2)} point</b> dans 95 % des cas. "
+            f"<i>Une association n'est pas une preuve de cause : les pays qui taxent le carbone ont aussi souvent "
+            f"d'autres politiques favorables.</i>"
         )
+        st.caption("Sources des politiques : World Carbon Pricing Database (Dolphin et Merkle, Resources for the "
+                   "Future, via Our World in Data) pour le prix moyen du carbone sur l'ensemble des émissions de CO2 "
+                   "(dollars constants de 2021 par tonne) ; Climate Policy Database v2024 (NewClimate Institute, "
+                   "CC BY 4.0) pour les quotas et certificats verts nationaux en vigueur. Un pays absent de ces bases "
+                   "est compté sans instrument.")
 
         # ---- À retenir + export ----
         a_retenir(
@@ -4900,14 +5004,20 @@ _aujourdhui = f"{_jour.day} {_mois_fr[_jour.month - 1]} {_jour.year}"
 
 with st.expander("Journal des nouveautés", icon=":material/new_releases:", expanded=True):
     _etapes = [
-        ("🔮", "Dernière version", "Prévision 2035 par séries temporelles", [
+        ("🏛️", "Dernière version", "Les politiques publiques entrent dans la prévision", [
+            ("🏷️", "Prix du carbone", "taxe ou marché du CO2, pays par pays depuis 1990 (World Carbon Pricing Database)."),
+            ("📜", "Quotas et certificats verts", "obligations nationales en faveur des renouvelables (Climate Policy Database)."),
+            ("📉", "Avant / après", "l'erreur de la régression à 5 ans, sans puis avec ces politiques, année par année."),
+            ("🔬", "Vérifié", "gain testé sur des années jamais vues, avec son intervalle de confiance."),
+        ]),
+        ("🔮", "Version précédente", "Prévision 2035 par séries temporelles", [
             ("🧪", "Cinq modèles", "naïf, dérive, Holt amorti, droite et courbe en S, testés sur 200 pays."),
             ("🎯", "Éventail 80 / 95 %", "une marge d'erreur vérifiée sur des années que les modèles n'avaient pas vues."),
             ("⏪", "Machine à remonter le temps", "rejouer une prévision depuis 2004 à 2023 et la comparer à la réalité."),
             ("🔗", "Régression multivariable", "ce qui annonce une progression des renouvelables, tous pays confondus."),
             ("📈", "Scénario 2050", "l'ancien onglet Projection, désormais présenté comme un scénario de tendance."),
         ]),
-        ("🧭", "Version précédente", "Barre latérale repensée", [
+        ("🧭", "Version antérieure", "Barre latérale repensée", [
             ("⚡", "Accès rapide", "un clic pour charger les géants mondiaux, l'Europe, les 7 pays du projet…"),
             ("📅", "Périodes rapides", "tout, depuis 2000 ou les 10 dernières années."),
             ("🎚️", "Jauge « Ta sélection »", "la part de renouvelables de tes pays face à la moyenne mondiale."),

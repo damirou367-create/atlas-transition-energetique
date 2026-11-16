@@ -6,8 +6,8 @@ conformément à la démarche officielle du projet Trends.
 Cette version ne remplace pas le tableau de bord HTML natif (qui reste le
 livrable principal, pour les raisons expliquées dans le rapport de stage :
 portabilité, aucune installation requise côté utilisateur final). Elle
-démontre la maîtrise de la stack officiellement recommandée, sur 9 onglets :
-transition, corrélation, projection, simulateur d'objectif, CO2 & GES,
+démontre la maîtrise de la stack officiellement recommandée, sur 10 onglets :
+transition, corrélation, prévision 2035, scénario 2050, simulateur d'objectif, CO2 & GES,
 comparaison de pays, cluster socio-économique, tests statistiques et carte.
 
 Thème visuel : harmonisé sur la palette Gaea officielle (voir
@@ -991,6 +991,212 @@ def backtest_numpy(annees, valeurs, n_annees_test=5, mode="lineaire"):
     return {"mae": mae, "n_test": len(a_test)}
 
 
+# ---------------------------------------------------------------
+# Prévision par séries temporelles (onglet « Prévision 2035 »).
+# Cinq modèles simples, tous en NumPy, comparés par un backtest
+# glissant sur tous les pays : on se place en 2003, 2004, … 2019,
+# on prévoit les années suivantes avec les seules données connues
+# à cette date, puis on compare à ce qui s'est réellement passé.
+# Les erreurs mesurées servent ensuite à deux choses : choisir le
+# meilleur modèle de chaque pays, et dessiner l'éventail 80 / 95 %
+# autour de la prévision (des intervalles « empiriques », tirés des
+# erreurs réelles et non d'une hypothèse de loi normale).
+# ---------------------------------------------------------------
+HORIZON_PREVISION = 2035
+COL_PREVISION = "part_renouvelables_dans_electricite"
+MODELES_TS = {
+    "naif": {"nom": "Naïf", "couleur": "#999999",
+             "idee": "la dernière valeur connue reste la même"},
+    "derive": {"nom": "Dérive", "couleur": "#45818e",
+               "idee": "on prolonge le rythme moyen observé depuis le début de la série"},
+    "holt": {"nom": "Holt amorti", "couleur": "#1565c0",
+             "idee": "tendance récente, qui s'essouffle progressivement"},
+    "droite": {"nom": "Droite", "couleur": "#b45f06",
+               "idee": "droite ajustée sur toute la série"},
+    "courbe_s": {"nom": "Courbe en S", "couleur": "#a64d79",
+                 "idee": "courbe logistique plafonnée à 100 %"},
+}
+
+# Grille des paramètres de Holt (lissage du niveau, de la tendance, amortissement)
+_HOLT_A, _HOLT_B, _HOLT_PHI = (np.array(v, dtype=float) for v in zip(
+    *[(a, b, phi) for a in (.2, .4, .6, .8, 1.) for b in (.05, .1, .2, .4) for phi in (.8, .9, .95, .98)]))
+
+
+def prevoir_ts(modele, y, h):
+    """Prévision des h années qui suivent la série y (valeurs annuelles), bornée entre 0 et 100 %."""
+    y = np.asarray(y, dtype=float)
+    pas = np.arange(1, h + 1)
+    if modele == "naif":
+        p = np.repeat(y[-1], h)
+    elif modele == "derive":
+        p = y[-1] + (y[-1] - y[0]) / (len(y) - 1) * pas
+    elif modele == "droite":
+        x = np.arange(len(y))
+        p = np.polyval(np.polyfit(x, y, 1), len(y) - 1 + pas)
+    elif modele == "courbe_s":
+        yb = np.clip(y, 0.5, 99.5)
+        x = np.arange(len(y))
+        coef = np.polyfit(x, np.log(yb / (100 - yb)), 1)
+        p = 100 / (1 + np.exp(-np.polyval(coef, len(y) - 1 + pas)))
+    else:  # Holt amorti : les 80 jeux de paramètres sont ajustés en même temps (calcul vectoriel)
+        niveau, tendance = np.full(_HOLT_A.shape, y[0]), np.full(_HOLT_A.shape, y[1] - y[0])
+        sce = np.zeros(_HOLT_A.shape)
+        for v in y[1:]:
+            prevu = niveau + _HOLT_PHI * tendance
+            sce += (v - prevu) ** 2
+            nouveau = _HOLT_A * v + (1 - _HOLT_A) * prevu
+            tendance = _HOLT_B * (nouveau - niveau) + (1 - _HOLT_B) * _HOLT_PHI * tendance
+            niveau = nouveau
+        k = int(np.argmin(sce))
+        p = niveau[k] + tendance[k] * np.cumsum(_HOLT_PHI[k] ** pas)
+    return np.clip(p, 0, 100)
+
+
+@st.cache_data(show_spinner="Backtest des 5 modèles sur tous les pays (une seule fois)…")
+def backtest_series_temporelles(_df, debut=2003, fin=2019, h_max=11, min_annees=15):
+    """Toutes les erreurs de prévision (prévu − réel) : une ligne par pays, modèle, origine et horizon."""
+    lignes = []
+    for pays, sous in _df.dropna(subset=[COL_PREVISION]).sort_values("annee").groupby("pays"):
+        annees = sous["annee"].to_numpy(dtype=int)
+        valeurs = sous[COL_PREVISION].to_numpy(dtype=float)
+        reel = dict(zip(annees, valeurs))
+        for origine in range(debut, fin + 1):
+            passe = valeurs[annees <= origine]
+            if len(passe) < min_annees:
+                continue
+            futur = [(h, reel[origine + h]) for h in range(1, h_max + 1) if origine + h in reel]
+            if not futur:
+                continue
+            for m in MODELES_TS:
+                prevu = prevoir_ts(m, passe, futur[-1][0])
+                lignes += [(pays, m, origine, h, prevu[h - 1] - v) for h, v in futur]
+    return pd.DataFrame(lignes, columns=["pays", "modele", "origine", "h", "erreur"])
+
+
+@st.cache_data
+def scores_series_temporelles(_erreurs):
+    """Erreur moyenne de chaque modèle pour chaque pays, mesurée comme le reste de
+    l'application : prévisions à 5 ans faites depuis 2014 à 2019 (vérifiables jusqu'en 2024)."""
+    e = _erreurs[(_erreurs["origine"] >= 2014) & (_erreurs["h"] <= 5)]
+    mae = e.assign(abs=e["erreur"].abs()).pivot_table(index="pays", columns="modele", values="abs", aggfunc="mean")
+    mae = mae[list(MODELES_TS)].dropna()
+    mae["meilleur"] = mae[list(MODELES_TS)].idxmin(axis=1)
+    return mae
+
+
+# Niveaux de quantiles de l'éventail. Les erreurs grandissent avec le temps (les renouvelables
+# accélèrent) : des quantiles 10-90 % appris sur le passé ne couvraient que 63 à 72 % des cas
+# sur les années suivantes. Les niveaux 5-95 % et 0,5-99,5 % ont été retenus parce qu'ils
+# couvrent réellement environ 80 % et 95 % des cas (voir couverture_testee).
+NIVEAUX_EVENTAIL = {80: (0.05, 0.95), 95: (0.005, 0.995)}
+
+
+@st.cache_data
+def quantiles_erreurs(_erreurs):
+    """Quantiles des erreurs par modèle et par horizon (1 à 11 ans), pour l'éventail."""
+    niveaux = sorted(q for paire in NIVEAUX_EVENTAIL.values() for q in paire)
+    return _erreurs.groupby(["modele", "h"])["erreur"].quantile(niveaux).unstack()
+
+
+@st.cache_data
+def erreur_par_horizon(_erreurs):
+    """Erreur moyenne de chaque modèle selon l'horizon de prévision (1 à 11 ans), tous pays et origines."""
+    return (_erreurs.assign(abs=_erreurs["erreur"].abs())
+            .pivot_table(index="h", columns="modele", values="abs", aggfunc="mean")[list(MODELES_TS)])
+
+
+@st.cache_data
+def couverture_testee(_erreurs, modele, coupures=(2009, 2011, 2013)):
+    """Part des cas où la réalité tombe dans l'éventail, sur des années jamais vues : quantiles appris
+    avec les erreurs vérifiables jusqu'à l'année de coupure, testés sur les prévisions faites après."""
+    e = _erreurs[_erreurs["modele"] == modele]
+    resultat = {}
+    for niv, (bas, haut) in NIVEAUX_EVENTAIL.items():
+        parts = []
+        for c in coupures:
+            q = (e[e["origine"] + e["h"] <= c].groupby("h")["erreur"].quantile([bas, haut]).unstack()
+                 .reindex(range(1, int(e["h"].max()) + 1)).ffill())
+            test = e[e["origine"] >= c].join(q, on="h")
+            parts.append(test["erreur"].between(test[bas], test[haut]).mean())
+        resultat[niv] = float(np.mean(parts))
+    return resultat
+
+
+@st.cache_data
+def test_choix_par_pays(_erreurs, coupures=range(2010, 2020)):
+    """Choisir pour chaque pays le modèle qui gagnait dans le passé, est-ce mieux sur des années nouvelles ?
+    À chaque coupure : choix avec les seules prévisions déjà vérifiables, puis erreur des prévisions
+    à 5 ans faites depuis la coupure. Renvoie l'erreur moyenne de la stratégie et de chaque modèle."""
+    e = _erreurs[_erreurs["h"] <= 5].assign(abs=lambda d: d["erreur"].abs())
+    lignes = []
+    for c in coupures:
+        passe = e[e["origine"] + e["h"] <= c].pivot_table(index="pays", columns="modele", values="abs").dropna()
+        test = e[e["origine"] == c].pivot_table(index="pays", columns="modele", values="abs").dropna()
+        test = test.loc[test.index.intersection(passe.index)]
+        if test.empty:
+            continue
+        choix = passe.loc[test.index].idxmin(axis=1)
+        lignes.append({"choix_par_pays": float(np.mean([test.loc[p, choix[p]] for p in test.index])),
+                       **test.mean().to_dict()})
+    return pd.DataFrame(lignes).mean()
+
+
+# Régression « panel » : un seul modèle pour tous les pays, qui prédit la
+# progression des 5 années suivantes à partir de 6 indicateurs du pays.
+VARIABLES_PANEL = {
+    "y": "Niveau actuel des renouvelables",
+    "d1": "Progression sur la dernière année",
+    "d5": "Progression sur 5 ans",
+    "ws": "Part solaire + éolien",
+    "dws5": "Progression solaire + éolien (5 ans)",
+    "lprod": "Électricité produite par habitant (log)",
+}
+
+
+def _variables_panel(df_base, h=5):
+    d = df_base.sort_values(["pays", "annee"])
+    g = d.groupby("pays")[COL_PREVISION]
+    v = pd.DataFrame({"pays": d["pays"], "annee": d["annee"], "y": d[COL_PREVISION]})
+    v["d1"], v["d5"] = g.diff(1), g.diff(5)
+    v["ws"] = d["part_solaire_dans_electricite"].fillna(0) + d["part_eolien_dans_electricite"].fillna(0)
+    v["dws5"] = v.groupby("pays")["ws"].diff(5)
+    v["lprod"] = np.log1p(d["production_totale_electricite"] / d["population"] * 1e9)
+    v["cible"] = g.shift(-h) - d[COL_PREVISION]
+    return v.dropna(subset=list(VARIABLES_PANEL))
+
+
+def _ajuster_ridge(table, lam=1.0):
+    X = table[list(VARIABLES_PANEL)].to_numpy(dtype=float)
+    mu, sd = X.mean(0), X.std(0) + 1e-9
+    A = np.column_stack([np.ones(len(X)), (X - mu) / sd])
+    penalite = np.eye(A.shape[1]); penalite[0, 0] = 0
+    w = np.linalg.solve(A.T @ A + lam * penalite, A.T @ table["cible"].to_numpy(dtype=float))
+    return w, mu, sd
+
+
+@st.cache_data(show_spinner="Régression multivariable sur tous les pays…")
+def regression_panel(_df, h=5):
+    """Coefficients standardisés, erreur de backtest (comparée au naïf) et prévision à 5 ans de chaque pays."""
+    v = _variables_panel(_df, h)
+    erreurs_panel, erreurs_naif = [], []
+    for origine in range(2014, 2020):  # même protocole que les autres modèles
+        w, mu, sd = _ajuster_ridge(v[(v["annee"] + h <= origine) & v["cible"].notna()])
+        test = v[(v["annee"] == origine) & v["cible"].notna()]
+        delta = w[0] + ((test[list(VARIABLES_PANEL)].to_numpy(dtype=float) - mu) / sd) @ w[1:]
+        reel = test["y"].to_numpy() + test["cible"].to_numpy()
+        erreurs_panel += list(np.abs(np.clip(test["y"].to_numpy() + delta, 0, 100) - reel))
+        erreurs_naif += list(np.abs(test["cible"].to_numpy()))
+    w, mu, sd = _ajuster_ridge(v[v["cible"].notna()])
+    derniere = v[v["annee"] == v.groupby("pays")["annee"].transform("max")]
+    prevu = np.clip(derniere["y"].to_numpy() + w[0] + ((derniere[list(VARIABLES_PANEL)].to_numpy(dtype=float) - mu) / sd) @ w[1:], 0, 100)
+    return {
+        "coefficients": pd.Series(w[1:], index=list(VARIABLES_PANEL)),
+        "mae": float(np.mean(erreurs_panel)), "mae_naif": float(np.mean(erreurs_naif)),
+        "prevision": pd.DataFrame({"pays": derniere["pays"].to_numpy(), "annee": derniere["annee"].to_numpy() + h,
+                                   "valeur": prevu}),
+    }
+
+
 def beta_fraction_continue(a, b, x):
     """Fraction continue utilisée pour approximer la fonction bêta incomplète
     (reprise à l'identique de app.py, pour une p-valeur cohérente entre les
@@ -1877,32 +2083,32 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
     background: linear-gradient(90deg, {GAEA_CORP["brown"]}, #bf9000);
 }}
 
-/* ---------- Onglets : tuiles (5 + 4 sur grand écran) ---------- */
+/* ---------- Onglets : tuiles en grille, 2 lignes de 5 sur grand écran ---------- */
 .stTabs::before {{ content: "Explorer les analyses"; display: block; text-align: center; font-size: 0.7rem;
     letter-spacing: 0.28em; text-transform: uppercase; font-weight: 700; color: {GAEA_CORP["brown"]}; margin: 8px 0 10px 0; }}
-.stTabs [role="tablist"] {{ display: flex !important; flex-wrap: wrap; justify-content: center; gap: 8px;
-    padding: 10px; border-radius: 22px; overflow: visible !important;
+.stTabs [role="tablist"] {{ display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px;
+    padding: 12px; border-radius: 22px; overflow: visible !important;
     position: relative; z-index: 5;
     background: rgba(255,255,255,0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(46,43,38,0.08); box-shadow: 0 14px 30px -20px rgba(46,43,38,0.55); }}
-/* Tuiles par ligne selon la largeur réelle de la zone : 5, puis 3, puis 2 (lignes incomplètes centrées) */
+/* 10 onglets : 5 colonnes (2 lignes pleines), puis 2 colonnes (5 lignes pleines) sur une zone étroite :
+   jamais de tuile isolée sur la dernière ligne. */
 .stTabs {{ container-type: inline-size; }}
-.stTabs [role="tab"] {{ flex: 0 1 calc(20% - 8px); }}
-@container (max-width: 1050px) {{ .stTabs [role="tab"] {{ flex-basis: calc(33.3% - 8px); }} }}
-@container (max-width: 560px) {{ .stTabs [role="tab"] {{ flex-basis: calc(50% - 8px); }} }}
+@container (max-width: 680px) {{ .stTabs [role="tablist"] {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 .stTabs [role="tablist"]::after, .stTabs [role="tablist"]::before,
 .stTabs .react-aria-SelectionIndicator {{ display: none !important; }}
 
-.stTabs [role="tab"] {{ position: relative; display: flex; align-items: center; justify-content: flex-start; min-width: 0;
-    min-height: 56px; height: auto !important; padding: 9px 14px !important; margin: 0 !important; border-radius: 16px;
+.stTabs [role="tab"] {{ position: relative; display: flex; align-items: center; justify-content: center; min-width: 0;
+    min-height: 96px; height: auto !important; padding: 12px 10px !important; margin: 0 !important; border-radius: 18px;
+    overflow: hidden; animation: gaeaTuile 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
     background: linear-gradient(180deg, #fffdf8, rgba(247, 243, 234, 0.95)); border: 1px solid rgba(46,43,38,0.07);
     transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease; }}
 .stTabs [role="tab"] [data-testid="stMarkdownContainer"] {{ min-width: 0; }}
-.stTabs [role="tab"] p {{ display: flex; align-items: center; gap: 9px; margin: 0; font-size: 0.84rem; line-height: 1.2;
-    font-weight: 500; color: {GAEA_CORP["text"]}; white-space: normal; text-align: left;
+.stTabs [role="tab"] p {{ display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0; font-size: 0.82rem;
+    line-height: 1.22; font-weight: 500; color: {GAEA_CORP["text"]}; white-space: normal; text-align: center;
     overflow-wrap: normal; word-break: normal; hyphens: manual; }}
 .stTabs [role="tab"] p span[role="img"] {{ flex: 0 0 auto; display: inline-flex !important; align-items: center; justify-content: center;
-    width: 34px; height: 34px; border-radius: 11px; font-size: 19px; color: {GAEA_CORP["accent_dark"]};
+    width: 40px; height: 40px; border-radius: 13px; font-size: 21px; color: {GAEA_CORP["accent_dark"]};
     background: linear-gradient(135deg, rgba(56,118,29,0.18), rgba(56,118,29,0.06));
     transition: transform 0.2s ease, background 0.2s ease; }}
 .stTabs [role="tab"]:not([aria-selected="true"]):hover {{ transform: translateY(-3px); background: #fff;
@@ -1916,6 +2122,21 @@ h2, h3 {{ color: {GAEA_CORP["accent_dark"]} !important; }}
 .stTabs [role="tab"][aria-selected="true"] p {{ color: #fff !important; font-weight: 600; }}
 .stTabs [role="tab"][aria-selected="true"] p span[role="img"] {{ color: #1e3d0c; background: #f5e6b8; }}
 .stTabs [role="tabpanel"] {{ padding-top: 18px; }}
+.stTabs [role="tab"]::after {{ content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 45%; pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgba(245,230,184,0.55), transparent); transform: skewX(-18deg);
+    transition: left 0.7s ease; }}
+.stTabs [role="tab"]:hover::after {{ left: 120%; }}
+@keyframes gaeaTuile {{ from {{ opacity: 0; transform: translateY(14px) scale(0.96); }} to {{ opacity: 1; transform: none; }} }}
+.stTabs [role="tab"]:nth-child(1) {{ animation-delay: 0.04s; }}
+.stTabs [role="tab"]:nth-child(2) {{ animation-delay: 0.08s; }}
+.stTabs [role="tab"]:nth-child(3) {{ animation-delay: 0.12s; }}
+.stTabs [role="tab"]:nth-child(4) {{ animation-delay: 0.16s; }}
+.stTabs [role="tab"]:nth-child(5) {{ animation-delay: 0.20s; }}
+.stTabs [role="tab"]:nth-child(6) {{ animation-delay: 0.24s; }}
+.stTabs [role="tab"]:nth-child(7) {{ animation-delay: 0.28s; }}
+.stTabs [role="tab"]:nth-child(8) {{ animation-delay: 0.32s; }}
+.stTabs [role="tab"]:nth-child(9) {{ animation-delay: 0.36s; }}
+.stTabs [role="tab"]:nth-child(10) {{ animation-delay: 0.40s; }}
 
 .gaea-kpi-rangee {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; margin-bottom: 10px; }}
 /* ---------- Cartes KPI : dégradé, reflet et légère élévation au survol ---------- */
@@ -3007,9 +3228,10 @@ st.markdown(
     '<span>↑</span><em>Analyses</em></a>',
     unsafe_allow_html=True,
 )
-onglet_transition, onglet2, onglet3, onglet_objectif, onglet5, onglet6, onglet_cluster, onglet8, onglet9 = st.tabs([
+onglet_transition, onglet2, onglet_prevision, onglet3, onglet_objectif, onglet5, onglet6, onglet_cluster, onglet8, onglet9 = st.tabs([
     ":material/swap_horiz: Transition énergétique", ":material/hub: Corrélation renouvelables / carbone",
-    ":material/trending_up: Projection", ":material/flag: Simulateur d'objectif",
+    ":material/insights: Prévision 2035", ":material/trending_up: Scénario 2050",
+    ":material/flag: Simulateur d'objectif",
     ":material/factory: CO2 & GES", ":material/compare_arrows: Comparaison pays",
     ":material/scatter_plot: Cluster socio-économique", ":material/science: Tests statistiques",
     ":material/public: Carte",
@@ -3139,9 +3361,13 @@ with onglet2:
     a_retenir(texte_precedence_temporelle(resultat_precedence))
 
 with onglet3:
-    st.subheader("Projection : droite ou courbe en S, départagées par backtest")
-    objectif("Prolonger la tendance d'un pays jusqu'en 2050 avec deux modèles, puis garder celui qui aurait le "
-             "mieux prédit les 5 dernières années connues.")
+    st.subheader("Scénario 2050 : et si la tendance passée continuait ?")
+    objectif("Prolonger la tendance d'un pays jusqu'en 2050 avec deux modèles (droite ou courbe en S), puis garder "
+             "celui qui aurait le mieux prédit les 5 dernières années connues.")
+    narratif("<b>Scénario, pas prévision.</b> Cet onglet répond à la question « où en serait le pays en 2050 si "
+             "le rythme passé se maintenait ? », utile pour se comparer aux objectifs de long terme. Pour savoir "
+             "où il sera <b>le plus probablement</b>, avec une marge d'erreur testée sur 200 pays, voir l'onglet "
+             "<b>« Prévision 2035 »</b>.")
     pays_pour_projection = st.selectbox(
         "Pays", options=pays_selectionnes, format_func=lambda p: NOMS_FR.get(p, p), key="pays_projection"
     )
@@ -3223,7 +3449,7 @@ with onglet3:
              for m, v in modeles.items()]
         )
         cartes_kpi(
-            [{"icone": "🗓️", "valeur": fmt_fr(val, decimales=1, suffixe=" %"), "label": f"Projection {an}",
+            [{"icone": "🗓️", "valeur": fmt_fr(val, decimales=1, suffixe=" %"), "label": f"Scénario {an}",
               "couleur": c}
              for (an, val), c in zip(zip(annees_futures, projections),
                                      [GAEA_CORP["accent_dark"], GAEA_CORP["accent"], "#1e3d0c"])]
@@ -3247,7 +3473,7 @@ with onglet3:
             )
         _retenir_projection += (
             f". Pour <b>{avec_article(pays_pour_projection)}</b>, elle projette <b>{projections[-1]:.1f} %</b> "
-            f"de renouvelables en 2050 : projection {_fiabilite}."
+            f"de renouvelables en 2050 : scénario {_fiabilite}."
         )
         if modele_retenu == "lineaire" and courbes["lineaire"][-1] >= 99.9:
             _retenir_projection += " <i>La droite dépasse 100 % avant 2050 : la valeur est plafonnée.</i>"
@@ -3258,6 +3484,317 @@ with onglet3:
         )
         tableau_projection.index.name = "Année"
         bouton_telechargement_csv(tableau_projection, f"projection_{pays_pour_projection}.csv")
+
+with onglet_prevision:
+    st.subheader(f"Prévision {HORIZON_PREVISION} : cinq modèles de séries temporelles, jugés sur leurs vraies erreurs")
+    objectif(f"Prévoir la part des renouvelables jusqu'en {HORIZON_PREVISION} avec le modèle qui s'est le moins "
+             "trompé sur des années qu'il n'avait jamais vues, et montrer honnêtement l'incertitude.")
+
+    erreurs_ts = backtest_series_temporelles(df)
+    scores_ts = scores_series_temporelles(erreurs_ts)
+    quantiles_ts = quantiles_erreurs(erreurs_ts)
+    par_horizon_ts = erreur_par_horizon(erreurs_ts)
+    panel_ts = regression_panel(df)
+    h_long = int(par_horizon_ts.index.max())
+    # Modèle retenu pour tous les pays : le plus juste en moyenne à l'horizon le plus long testé
+    modele_retenu_ts = par_horizon_ts.loc[h_long].idxmin()
+    couverture_ts = couverture_testee(erreurs_ts, modele_retenu_ts)
+    choix_ts = test_choix_par_pays(erreurs_ts)
+    info_retenu = MODELES_TS[modele_retenu_ts]
+    couleur_m = info_retenu["couleur"]
+
+    def _rgba_hex(c, a):
+        return f"rgba({int(c[1:3], 16)},{int(c[3:5], 16)},{int(c[5:7], 16)},{a})"
+
+    cartes_kpi([
+        {"icone": "🧪", "valeur": fmt_fr(len(erreurs_ts), 0), "label": "prévisions vérifiées sur des années déjà connues",
+         "couleur": GAEA_CORP["accent_dark"]},
+        {"icone": "🌍", "valeur": str(len(scores_ts)), "label": "pays testés (au moins 15 ans d'historique)",
+         "couleur": GAEA_CORP["accent"]},
+        {"icone": "🧮", "valeur": str(len(MODELES_TS) + 1),
+         "label": "modèles en compétition, dont une régression multivariable", "couleur": "#45818e"},
+        {"icone": "🎯", "valeur": f"{fmt_fr(100 * couverture_ts[80], 0)} %",
+         "label": "des cas réels tombent dans l'intervalle à 80 % (testé sur des années jamais vues)",
+         "couleur": "#595959"},
+    ])
+
+    pays_prevision = st.selectbox(
+        "Pays", options=pays_selectionnes, format_func=lambda p: NOMS_FR.get(p, p), key="pays_prevision"
+    )
+    serie_prev = df[df["pays"] == pays_prevision].dropna(subset=[COL_PREVISION]).sort_values("annee")
+    annees_prev = serie_prev["annee"].to_numpy(dtype=int)
+    valeurs_prev = serie_prev[COL_PREVISION].to_numpy(dtype=float)
+
+    if len(valeurs_prev) < 15 or pays_prevision not in scores_ts.index:
+        st.warning("Historique trop court pour ce pays (moins de 15 années) : prévision non évaluable.")
+    else:
+        score_pays = scores_ts.loc[pays_prevision]
+        gagnant_pays = score_pays["meilleur"]
+        derniere_annee = int(annees_prev[-1])
+        h_prev = HORIZON_PREVISION - derniere_annee
+        annees_futures_prev = np.arange(derniere_annee + 1, HORIZON_PREVISION + 1)
+        previsions = {m: prevoir_ts(m, valeurs_prev, h_prev) for m in MODELES_TS}
+        # Éventail : prévu − erreur observée au même horizon (quantiles des erreurs de tous les pays)
+        q = quantiles_ts.loc[modele_retenu_ts].reindex(range(1, h_prev + 1)).ffill()
+        centrale = previsions[modele_retenu_ts]
+        bornes = {niv: (np.clip(centrale - q[haut].to_numpy(), 0, 100), np.clip(centrale - q[bas].to_numpy(), 0, 100))
+                  for niv, (bas, haut) in NIVEAUX_EVENTAIL.items()}
+
+        # ---- 1. L'éventail de prévision ----
+        afficher_autres = st.toggle("Afficher aussi les quatre autres modèles", value=False, key="prevision_autres")
+        with st.container(border=True):
+            fig = go.Figure()
+            x_band = np.concatenate([[derniere_annee], annees_futures_prev])
+            for niv, alpha in ((95, 0.13), (80, 0.26)):
+                bas, haut = bornes[niv]
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([x_band, x_band[::-1]]),
+                    y=np.concatenate([[valeurs_prev[-1]], haut, bas[::-1], [valeurs_prev[-1]]]),
+                    fill="toself", fillcolor=_rgba_hex(couleur_m, alpha), line=dict(width=0),
+                    name=f"Intervalle {niv} %", hoverinfo="skip",
+                ))
+            fig.add_trace(go.Scatter(
+                x=annees_prev, y=valeurs_prev, mode="lines+markers", name="Historique",
+                line=dict(width=3, color=GAEA_CORP["accent_dark"]), marker=dict(size=5),
+                hovertemplate="%{y:.1f} %<extra>observé</extra>",
+            ))
+            if afficher_autres:
+                for m, info in MODELES_TS.items():
+                    if m != modele_retenu_ts:
+                        fig.add_trace(go.Scatter(
+                            x=x_band, y=np.concatenate([[valeurs_prev[-1]], previsions[m]]), mode="lines",
+                            name=info["nom"], line=dict(width=1.6, color=info["couleur"], dash="dot"), opacity=0.8,
+                            hovertemplate="%{y:.1f} %<extra>" + info["nom"] + "</extra>",
+                        ))
+            fig.add_trace(go.Scatter(
+                x=x_band, y=np.concatenate([[valeurs_prev[-1]], centrale]), mode="lines",
+                name=f"{info_retenu['nom']} (retenu)", line=dict(width=4, color=couleur_m),
+                hovertemplate="%{y:.1f} %<extra>" + info_retenu["nom"] + "</extra>",
+            ))
+            panel_pays = panel_ts["prevision"].query("pays == @pays_prevision")
+            if not panel_pays.empty:
+                fig.add_trace(go.Scatter(
+                    x=panel_pays["annee"], y=panel_pays["valeur"], mode="markers", name="Régression multivariable",
+                    marker=dict(symbol="diamond", size=13, color="#bf9000", line=dict(width=1.5, color="white")),
+                    hovertemplate="%{y:.1f} %<extra>régression multivariable</extra>",
+                ))
+            fig.add_vline(x=derniere_annee, line_dash="dot", line_color="rgba(46,43,38,0.35)", line_width=1)
+            fig.add_annotation(x=derniere_annee, y=0.02, yref="paper", text="dernière donnée ", showarrow=False,
+                               xanchor="right", yanchor="bottom", font=dict(size=11, color="rgba(46,43,38,0.6)"))
+            fig.add_annotation(x=HORIZON_PREVISION, y=centrale[-1], text=f"<b>{fmt_fr(centrale[-1])} %</b>",
+                               showarrow=False, xanchor="left", xshift=6, font=dict(size=14, color=couleur_m))
+            fig = theme_plotly(fig, hauteur=470, titre_x="Année", titre_y="Part des renouvelables (%)")
+            fig.update_yaxes(range=[0, 105])
+            fig.update_xaxes(range=[annees_prev[0] - 0.5, HORIZON_PREVISION + 4])
+            st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_eventail")
+            st.caption(
+                f"Bandes tirées des écarts réellement observés entre prévision et réalité, au même horizon, pour "
+                f"« {info_retenu['nom']} » sur l'ensemble des pays. Testées sur des années jamais vues, elles "
+                f"contiennent la réalité dans {fmt_fr(100 * couverture_ts[80], 0)} % des cas (bande 80 %) et "
+                f"{fmt_fr(100 * couverture_ts[95], 0)} % des cas (bande 95 %). Losange : régression multivariable, "
+                f"à 5 ans."
+            )
+
+        i30 = 2030 - derniere_annee - 1
+        mae_retenu, mae_naif = score_pays[modele_retenu_ts], score_pays["naif"]
+        cartes_kpi([
+            {"icone": "🗓️", "valeur": f"{fmt_fr(centrale[i30])} %", "label": f"Prévision 2030 · 80 % entre "
+             f"{fmt_fr(bornes[80][0][i30], 0)} et {fmt_fr(bornes[80][1][i30], 0)} %", "couleur": GAEA_CORP["accent"]},
+            {"icone": "🔭", "valeur": f"{fmt_fr(centrale[-1])} %", "label": f"Prévision {HORIZON_PREVISION} · 80 % "
+             f"entre {fmt_fr(bornes[80][0][-1], 0)} et {fmt_fr(bornes[80][1][-1], 0)} %",
+             "couleur": GAEA_CORP["accent_dark"]},
+            {"icone": "🏆", "valeur": info_retenu["nom"],
+             "label": f"retenu pour tous les pays : le plus juste à {h_long} ans "
+                      f"({fmt_fr(par_horizon_ts.loc[h_long, modele_retenu_ts])} pts contre "
+                      f"{fmt_fr(par_horizon_ts.loc[h_long, 'naif'])} pour le naïf)", "couleur": couleur_m},
+            {"icone": "📏", "valeur": f"{fmt_fr(mae_retenu)} pts",
+             "label": f"son erreur moyenne à 5 ans pour {avec_article(pays_prevision)} (naïf : {fmt_fr(mae_naif)})",
+             "couleur": "#595959"},
+        ])
+
+        # ---- 2. L'erreur selon l'horizon : pourquoi ce modèle ----
+        col_horizon, col_duel = st.columns(2)
+        with col_horizon:
+            with st.container(border=True):
+                st.markdown(f"**Plus on prévoit loin, plus on se trompe : qui résiste le mieux ?**")
+                fig = go.Figure()
+                for m, info in MODELES_TS.items():
+                    retenu = m == modele_retenu_ts
+                    fig.add_trace(go.Scatter(
+                        x=par_horizon_ts.index, y=par_horizon_ts[m], mode="lines+markers", name=info["nom"],
+                        line=dict(width=4 if retenu else 2, color=info["couleur"]), marker=dict(size=7 if retenu else 4),
+                        hovertemplate="%{y:.2f} pts<extra>" + info["nom"] + "</extra>",
+                    ))
+                fig = theme_plotly(fig, hauteur=330, titre_x="Horizon de prévision (années)",
+                                   titre_y="Erreur moyenne (points)")
+                fig.update_xaxes(dtick=1)
+                st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_horizon")
+                st.caption(f"Tous pays, prévisions faites depuis 2003 à 2019 ({fmt_fr(len(erreurs_ts), 0)} "
+                           f"comparaisons avec la réalité).")
+
+        # ---- 3. Le duel des modèles pour ce pays (pour information) ----
+        with col_duel:
+            with st.container(border=True):
+                st.markdown(f"**Qui aurait gagné pour {avec_article(pays_prevision)} ?**")
+                ordre = sorted(MODELES_TS, key=lambda m: score_pays[m], reverse=True)
+                fig = go.Figure(go.Bar(
+                    y=[MODELES_TS[m]["nom"] for m in ordre], x=[score_pays[m] for m in ordre], orientation="h",
+                    marker_color=[MODELES_TS[m]["couleur"] if m == gagnant_pays
+                                  else _rgba_hex(MODELES_TS[m]["couleur"], 0.45) for m in ordre],
+                    text=[fmt_fr(score_pays[m]) + (" 🏆" if m == gagnant_pays else "") for m in ordre],
+                    textposition="outside", hovertemplate="%{y} : %{x:.2f} pts<extra></extra>",
+                ))
+                fig.add_vline(x=mae_naif, line_dash="dash", line_color="#595959", line_width=1.5)
+                fig = theme_plotly(fig, hauteur=330, titre_x="Erreur moyenne à 5 ans (points)", legende=False)
+                fig.update_layout(hovermode="closest")
+                fig.update_xaxes(range=[0, max(score_pays[m] for m in MODELES_TS) * 1.3])
+                st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_duel")
+                st.caption("Prévisions à 5 ans faites depuis 2014 à 2019 ; tirets : le naïf.")
+
+        part_tendance_battue = (scores_ts["naif"] < scores_ts[["droite", "courbe_s"]].min(axis=1)).mean()
+        narratif(
+            f"À 1 an, <b>le naïf</b> (« rien ne change ») et <b>{info_retenu['nom']}</b> se valent "
+            f"({fmt_fr(par_horizon_ts.loc[1, 'naif'], 2)} et {fmt_fr(par_horizon_ts.loc[1, modele_retenu_ts], 2)} points "
+            f"d'erreur). Mais plus l'horizon s'allonge, plus {info_retenu['nom']} prend l'avantage : à {h_long} ans, "
+            f"<b>{fmt_fr(par_horizon_ts.loc[h_long, modele_retenu_ts], 2)} points</b> contre "
+            f"{fmt_fr(par_horizon_ts.loc[h_long, 'naif'], 2)} pour le naïf et "
+            f"{fmt_fr(par_horizon_ts.loc[h_long, 'droite'], 2)} pour la droite. Prolonger une droite ou une courbe en S "
+            f"sur toute la série coûte cher : à 5 ans, même la meilleure des deux fait moins bien que le naïf dans "
+            f"<b>{fmt_fr(100 * part_tendance_battue, 0)} % des pays</b>. C'est pourquoi l'onglet Scénario 2050 est à lire "
+            f"comme un <i>scénario de tendance</i>, et celui-ci comme une <i>prévision</i>."
+        )
+        narratif(
+            f"Et pourquoi ne pas garder, pays par pays, le modèle qui a gagné dans le passé (graphique de droite) ? "
+            f"Nous l'avons testé sur des années qu'il n'avait pas vues : cette stratégie se trompe de "
+            f"<b>{fmt_fr(choix_ts['choix_par_pays'], 2)} points</b> à 5 ans, contre "
+            f"<b>{fmt_fr(choix_ts[modele_retenu_ts], 2)}</b> en appliquant {info_retenu['nom']} partout. Le gagnant "
+            f"d'hier n'est pas celui de demain : un même modèle pour tous est plus fiable."
+        )
+
+        # ---- 4. Machine à remonter le temps : rejouer une prévision passée ----
+        with st.container(border=True):
+            st.markdown("**⏪ Machine à remonter le temps : et si on avait prévu depuis le passé ?**")
+            origines_possibles = [a for a in range(2003, derniere_annee) if (annees_prev <= a).sum() >= 15]
+            if origines_possibles:
+                origine_tm = st.select_slider(
+                    "Se placer à la fin de l'année", options=origines_possibles,
+                    value=2014 if 2014 in origines_possibles else origines_possibles[0], key="prevision_machine_temps",
+                )
+                passe_tm = valeurs_prev[annees_prev <= origine_tm]
+                h_tm = derniere_annee - origine_tm
+                x_tm = np.arange(origine_tm, derniere_annee + 1)
+                reel_tm = valeurs_prev[annees_prev > origine_tm]
+                fig = go.Figure()
+                fig.add_vrect(x0=origine_tm, x1=derniere_annee, fillcolor="rgba(46,43,38,0.04)", line_width=0)
+                fig.add_trace(go.Scatter(
+                    x=annees_prev[annees_prev <= origine_tm], y=passe_tm, mode="lines+markers",
+                    name="Connu à l'époque", line=dict(width=3, color=GAEA_CORP["accent_dark"]), marker=dict(size=5),
+                    hovertemplate="%{y:.1f} %<extra>connu</extra>",
+                ))
+                fig.add_trace(go.Scatter(
+                    x=annees_prev[annees_prev >= origine_tm], y=valeurs_prev[annees_prev >= origine_tm],
+                    mode="lines+markers", name="Ce qui s'est vraiment passé",
+                    line=dict(width=3, color="#2e2b26", dash="dot"), marker=dict(size=7, symbol="circle-open"),
+                    hovertemplate="%{y:.1f} %<extra>réel</extra>",
+                ))
+                ecarts_tm = {}
+                for m, info in MODELES_TS.items():
+                    p_tm = prevoir_ts(m, passe_tm, h_tm)
+                    ecarts_tm[m] = float(np.mean(np.abs(p_tm - reel_tm)))
+                    fig.add_trace(go.Scatter(
+                        x=x_tm, y=np.concatenate([[passe_tm[-1]], p_tm]), mode="lines", name=info["nom"],
+                        line=dict(width=3.5 if m == modele_retenu_ts else 1.8, color=info["couleur"]),
+                        opacity=1 if m == modele_retenu_ts else 0.75,
+                        hovertemplate="%{y:.1f} %<extra>" + info["nom"] + "</extra>",
+                    ))
+                fig = theme_plotly(fig, hauteur=400, titre_x="Année", titre_y="Part des renouvelables (%)")
+                fig.update_yaxes(range=[0, 105])
+                st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_machine")
+                gagnant_tm, perdant_tm = min(ecarts_tm, key=ecarts_tm.get), max(ecarts_tm, key=ecarts_tm.get)
+                st.caption(
+                    f"Depuis {origine_tm}, sur {h_tm} ans : le plus juste aurait été « {MODELES_TS[gagnant_tm]['nom']} » "
+                    f"({fmt_fr(ecarts_tm[gagnant_tm])} points d'écart moyen), le moins juste "
+                    f"« {MODELES_TS[perdant_tm]['nom']} » ({fmt_fr(ecarts_tm[perdant_tm])} points) ; "
+                    f"{info_retenu['nom']} : {fmt_fr(ecarts_tm[modele_retenu_ts])} points. "
+                    f"Fais glisser le curseur pour rejouer d'autres années."
+                )
+
+        # ---- 5. La carte du gagnant de chaque pays ----
+        with st.container(border=True):
+            st.markdown("**Quel modèle aurait été le plus juste, pays par pays ? (prévisions à 5 ans, 2014-2019)**")
+            carte_m = scores_ts[["meilleur"]].reset_index().merge(
+                df[["pays", "code_iso"]].drop_duplicates("pays"), on="pays", how="left")
+            carte_m["Modèle"] = carte_m["meilleur"].map(lambda m: MODELES_TS[m]["nom"])
+            carte_m["pays_fr"] = carte_m["pays"].map(NOMS_FR).fillna(carte_m["pays"])
+            fig = px.choropleth(
+                carte_m, locations="code_iso", color="Modèle", hover_name="pays_fr",
+                category_orders={"Modèle": [v["nom"] for v in MODELES_TS.values()]},
+                color_discrete_map={v["nom"]: v["couleur"] for v in MODELES_TS.values()},
+            )
+            fig.update_traces(marker_line_color="white", marker_line_width=0.4)
+            fig.update_layout(
+                template="plotly_white", height=430, margin=dict(l=0, r=0, t=10, b=0),
+                font=dict(family="Inter, 'Segoe UI', sans-serif", size=13, color=GAEA_CORP["text"]),
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0, title=None),
+                geo=dict(bgcolor="rgba(0,0,0,0)", showframe=False, showcoastlines=False,
+                         projection_type="equal earth", lataxis_range=[-58, 85]),
+            )
+            fig.update_geos(fitbounds="locations", visible=False)
+            st.plotly_chart(fig, width="stretch", config={**CONFIG_PLOTLY_EXPORT, "scrollZoom": False},
+                            key="chart_prevision_carte")
+            victoires = scores_ts["meilleur"].value_counts()
+            st.caption(
+                "Gagnants : " + " · ".join(f"{MODELES_TS[m]['nom']} {victoires.get(m, 0)} pays" for m in MODELES_TS)
+                + ". Le gris (naïf) domine dans les pays dont le mix électrique bouge peu. Cette carte montre le "
+                  "passé : elle ne sert pas à choisir le modèle (voir le test ci-dessus)."
+            )
+
+        # ---- 6. La régression multivariable (« panel ») ----
+        with st.container(border=True):
+            st.markdown("**Régression multivariable : qu'est-ce qui annonce une progression des renouvelables ?**")
+            coefs = panel_ts["coefficients"].sort_values()
+            fig = go.Figure(go.Bar(
+                y=[VARIABLES_PANEL[k] for k in coefs.index], x=coefs.to_numpy(), orientation="h",
+                marker_color=[GAEA_CORP["accent"] if c > 0 else "#595959" for c in coefs],
+                text=[("+" if c > 0 else "") + fmt_fr(c, 2) for c in coefs], textposition="outside",
+                hovertemplate="%{y} : %{x:+.2f} pt<extra></extra>",
+            ))
+            fig = theme_plotly(fig, hauteur=320, titre_x="Effet sur la progression à 5 ans (points, pour un "
+                               "écart-type de la variable)", legende=False)
+            fig.update_layout(hovermode="closest")
+            borne = float(np.abs(coefs).max()) * 1.4
+            fig.update_xaxes(range=[-borne, borne])
+            st.plotly_chart(fig, width="stretch", config=CONFIG_PLOTLY_EXPORT, key="chart_prevision_panel")
+            st.caption("Un seul modèle pour tous les pays (régression ridge en NumPy), qui prédit la progression des "
+                       "5 années suivantes à partir de six indicateurs du pays.")
+        _var_forte = panel_ts["coefficients"].abs().idxmax()
+        narratif(
+            f"La variable la plus utile est <b>« {VARIABLES_PANEL[_var_forte]} »</b> : un pays déjà engagé dans "
+            f"le solaire et l'éolien continue de progresser. À l'inverse, un niveau actuel élevé freine la "
+            f"progression (on approche du plafond). En backtest, la régression se trompe de "
+            f"<b>{fmt_fr(panel_ts['mae'], 2)} points</b> à 5 ans contre <b>{fmt_fr(panel_ts['mae_naif'], 2)}</b> "
+            f"pour le naïf sur les mêmes pays : l'information en plus n'apporte qu'un <b>petit gain</b>."
+        )
+
+        # ---- À retenir + export ----
+        a_retenir(
+            f"Pour <b>{avec_article(pays_prevision)}</b>, le modèle <b>« {info_retenu['nom']} »</b> "
+            f"({info_retenu['idee']}) prévoit <b>{fmt_fr(centrale[-1])} %</b> de renouvelables en "
+            f"{HORIZON_PREVISION}, avec 80 % de chances d'être entre <b>{fmt_fr(bornes[80][0][-1], 0)} et "
+            f"{fmt_fr(bornes[80][1][-1], 0)} %</b>. Ce modèle a été choisi parce qu'il est le plus juste sur les "
+            f"longs horizons, testé sur {len(scores_ts)} pays. Au-delà de {HORIZON_PREVISION}, l'incertitude "
+            f"devient trop large pour être utile."
+            + (f" <i>La tendance atteint le plafond de 100 % dès {int(annees_futures_prev[np.argmax(centrale >= 99.95)])} : "
+               f"la prévision est plafonnée.</i>" if centrale[-1] >= 99.95 else "")
+        )
+        tableau_prev = pd.DataFrame(
+            {**{f"{v['nom']} (%)": previsions[m] for m, v in MODELES_TS.items()},
+             "Bas 95 % (%)": bornes[95][0], "Bas 80 % (%)": bornes[80][0],
+             "Haut 80 % (%)": bornes[80][1], "Haut 95 % (%)": bornes[95][1]},
+            index=pd.Index(annees_futures_prev, name="Année"),
+        ).round(2)
+        bouton_telechargement_csv(tableau_prev, f"prevision_{HORIZON_PREVISION}_{pays_prevision}.csv")
 
 with onglet_objectif:
     st.subheader("Simulateur d'objectif : quelle trajectoire pour atteindre une cible ?")
@@ -4363,14 +4900,21 @@ _aujourdhui = f"{_jour.day} {_mois_fr[_jour.month - 1]} {_jour.year}"
 
 with st.expander("Journal des nouveautés", icon=":material/new_releases:", expanded=True):
     _etapes = [
-        ("🧭", "Dernière version", "Barre latérale repensée", [
+        ("🔮", "Dernière version", "Prévision 2035 par séries temporelles", [
+            ("🧪", "Cinq modèles", "naïf, dérive, Holt amorti, droite et courbe en S, testés sur 200 pays."),
+            ("🎯", "Éventail 80 / 95 %", "une marge d'erreur vérifiée sur des années que les modèles n'avaient pas vues."),
+            ("⏪", "Machine à remonter le temps", "rejouer une prévision depuis 2004 à 2023 et la comparer à la réalité."),
+            ("🔗", "Régression multivariable", "ce qui annonce une progression des renouvelables, tous pays confondus."),
+            ("📈", "Scénario 2050", "l'ancien onglet Projection, désormais présenté comme un scénario de tendance."),
+        ]),
+        ("🧭", "Version précédente", "Barre latérale repensée", [
             ("⚡", "Accès rapide", "un clic pour charger les géants mondiaux, l'Europe, les 7 pays du projet…"),
             ("📅", "Périodes rapides", "tout, depuis 2000 ou les 10 dernières années."),
             ("🎚️", "Jauge « Ta sélection »", "la part de renouvelables de tes pays face à la moyenne mondiale."),
             ("🔃", "Tri", "les pays les plus verts ou les moins verts d'abord, top 3 présélectionné."),
             ("❓", "Guide express", "les 3 étapes pour bien démarrer."),
         ]),
-        ("📈", "Projection", "Droite ou courbe en S ?",
+        ("📈", "Scénario 2050", "Droite ou courbe en S ?",
          "Les deux modèles sont ajustés puis départagés par backtest : on garde celui qui aurait le mieux "
          "prédit les 5 dernières années connues."),
         ("🎯", "Lecture", "9 onglets, une même structure",
@@ -4401,8 +4945,8 @@ with st.expander("Journal des nouveautés", icon=":material/new_releases:", expa
 with st.expander("Méthodologie et sources", icon=":material/menu_book:", expanded=True):
     _nb_pays = fmt_fr(df["pays"].nunique(), decimales=0)
     _an_min, _an_max = int(df["annee"].min()), int(df["annee"].max())
-    _onglets = ["🌱 Transition", "🔗 Corrélation", "📈 Projection", "🎯 Simulateur", "🏭 CO2 & GES",
-                "🌍 Comparaison pays", "💰 Cluster", "🧪 Tests", "🗺️ Carte"]
+    _onglets = ["🌱 Transition", "🔗 Corrélation", "🔮 Prévision 2035", "📈 Scénario 2050", "🎯 Simulateur",
+                "🏭 CO2 & GES", "🌍 Comparaison pays", "💰 Cluster", "🧪 Tests", "🗺️ Carte"]
     # Sources reprises de la bibliographie du rapport de stage
     _sources = [
         ("🌍", "Our World in Data", "https://ourworldindata.org/energy", "Base principale",
@@ -4422,20 +4966,20 @@ with st.expander("Méthodologie et sources", icon=":material/menu_book:", expand
          "<b>Part des renouvelables</b> dans l'électricité (%) · <b>intensité carbone</b> de l'électricité "
          "(gCO2/kWh) · <b>émissions de CO2 et de GES</b> par habitant."),
         ("🧮", "Méthodes",
-         "Corrélation de Pearson et décalage temporel · tests t de Welch et apparié · droite et courbe en S "
-         "avec backtest · ACP, k-means et CAH."),
+         "Corrélation de Pearson et décalage temporel · tests t de Welch et apparié · séries temporelles (Holt "
+         "amorti) avec backtest glissant sur 200 pays · droite et courbe en S · régression ridge · ACP, k-means et CAH."),
         ("⚠️", "Limites",
-         "Une corrélation ne prouve pas une causalité. Une projection prolonge une tendance, ce n'est pas une "
-         "prévision. Certaines séries ont des années manquantes."),
+         "Une corrélation ne prouve pas une causalité. Le scénario 2050 prolonge une tendance, ce n'est pas une "
+         "prévision ; la prévision 2035 a une marge d'erreur, qui grandit avec l'horizon."),
     ]
     st.markdown(
         '<div class="gaea-methodo-bandeau">'
         f'<div><b>{_nb_pays}</b><span>pays et territoires</span></div>'
         f'<div><b>{_an_max - _an_min + 1}</b><span>ans, {_an_min}–{_an_max}</span></div>'
         f'<div><b>{len(_onglets)}</b><span>analyses</span></div>'
-        '<div class="gaea-bandeau-survol" tabindex="0"><div class="gaea-bandeau-face"><b>5</b>'
+        '<div class="gaea-bandeau-survol" tabindex="0"><div class="gaea-bandeau-face"><b>6</b>'
         '<span>familles de méthodes</span><i>survole pour voir</i></div>'
-        '<div class="gaea-bandeau-dos"><em>Corrélation</em><em>Tests t</em><em>Projection</em>'
+        '<div class="gaea-bandeau-dos"><em>Corrélation</em><em>Tests t</em><em>Séries temporelles</em><em>Scénarios</em>'
         '<em>ACP</em><em>Classification</em></div></div></div>'
         '<div class="gaea-methodo-onglets">'
         + "".join(f"<span>{o}</span>" for o in _onglets) + '</div>'
